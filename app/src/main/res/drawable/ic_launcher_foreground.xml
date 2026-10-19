@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Left Green Loop Arc -->
+    <path
+        android:pathData="M 54,54 C 44,38 24,38 24,54 C 24,70 44,70 54,54 Z"
+        android:strokeWidth="9"
+        android:strokeLineCap="round">
+        <aapt:attr name="android:strokeColor">
+            <gradient
+                android:startX="24"
+                android:startY="54"
+                android:endX="54"
+                android:endY="54"
+                android:type="linear">
+                <item android:color="#10B981" android:offset="0.0"/>
+                <item android:color="#34D399" android:offset="1.0"/>
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- Right Blue Loop Arc -->
+    <path
+        android:pathData="M 54,54 C 64,38 84,38 84,54 C 84,70 64,70 54,54 Z"
+        android:strokeWidth="9"
+        android:strokeLineCap="round">
+        <aapt:attr name="android:strokeColor">
+            <gradient
+                android:startX="54"
+                android:startY="54"
+                android:endX="84"
+                android:endY="54"
+                android:type="linear">
+                <item android:color="#0EA5E9" android:offset="0.0"/>
+                <item android:color="#0284C7" android:offset="1.0"/>
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- House Icon inside Right Loop -->
+    <path
+        android:pathData="M 69,48 L 74,43 L 79,48 L 78,48 L 78,55 L 70,55 L 70,48 Z"
+        android:fillColor="#0284C7"/>
+
+    <!-- Medical Cross inside House -->
+    <path
+        android:pathData="M 73,49 H 75 V 53 H 73 Z M 72,50 H 76 V 52 H 72 Z"
+        android:fillColor="#FFFFFF"/>
+
+</vector>
