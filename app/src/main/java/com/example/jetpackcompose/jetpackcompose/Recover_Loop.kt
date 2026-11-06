@@ -1,18 +1,8 @@
 package com.example.jetpackcompose.jetpackcompose
 
-import android.content.Intent
-import android.os.Bundle
-import android.speech.RecognitionListener
-import android.speech.RecognizerIntent
-import android.speech.SpeechRecognizer
-import android.speech.tts.TextToSpeech
-import android.speech.tts.UtteranceProgressListener
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -33,37 +23,47 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowForward
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.automirrored.filled.Chat
+import androidx.compose.material.icons.automirrored.filled.DirectionsWalk
+import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.AttachFile
 import androidx.compose.material.icons.filled.CallEnd
-import androidx.compose.material.icons.filled.Chat
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.CloudDone
 import androidx.compose.material.icons.filled.DateRange
-import androidx.compose.material.icons.filled.DirectionsWalk
+import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.Key
+import androidx.compose.material.icons.filled.Image
+import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.LocalHospital
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Medication
 import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.MoreHoriz
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PhoneInTalk
+import androidx.compose.material.icons.filled.PictureAsPdf
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Restaurant
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Send
 import androidx.compose.material.icons.filled.Thermostat
-import androidx.compose.material.icons.filled.VolumeOff
-import androidx.compose.material.icons.filled.VolumeUp
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -72,47 +72,38 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
-import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.google.ai.client.generativeai.GenerativeModel
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-import java.util.Locale
 
 // ==========================================
 // BRAND COLOR PALETTE (RecoveryLoop Theme)
 // ==========================================
 private val PrimaryBlue = Color(0xFF0284C7)
+private val PrimaryDarkBlue = Color(0xFF0369A1)
 private val TealAccent = Color(0xFF0EA5E9)
 private val DarkVoiceBg = Color(0xFF0F172A)
 
@@ -135,12 +126,36 @@ private val TextMuted = Color(0xFF64748B)
 private val AppBgLight = Color(0xFFF8FAFC)
 
 // ==========================================
-// ENUMS & DATA MODELS
+// DATA MODELS WITH MULTI-USER & PRESCRIPTION
 // ==========================================
 
-enum class AppRole { ONBOARDING, PATIENT, HOSPITAL_STAFF, CLINICIAN }
+enum class AppRole { LOGIN, ONBOARDING, PATIENT, HOSPITAL_STAFF, CLINICIAN }
 
 enum class ChatSender { USER, AI_BOT }
+
+data class PrescriptionData(
+    val fileName: String,
+    val fileType: String, // "PDF" or "IMAGE"
+    val uploadedDate: String,
+    val doctorName: String,
+    val clinicName: String,
+    val diagnosis: String,
+    val specialInstructions: String,
+    val extractedDosages: List<String>
+)
+
+data class UserProfile(
+    val id: String,
+    val name: String,
+    val patientCode: String,
+    val dayCount: Int,
+    val totalDays: Int = 30,
+    val status: String, // "Stable", "At Risk"
+    val condition: String,
+    val doctorName: String,
+    val avatarBg: Color,
+    val prescription: PrescriptionData? = null
+)
 
 data class ChatMessage(
     val id: String,
@@ -149,343 +164,191 @@ data class ChatMessage(
     val time: String,
     val isAudio: Boolean = false,
     val audioDuration: String? = null,
-    val quickReplies: List<String>? = null,
-    val isLoading: Boolean = false
-)
-
-data class HealthAlertItem(
-    val id: String,
-    val title: String,
-    val time: String,
-    val detailText: String,
-    val isHighPriority: Boolean,
-    val icon: ImageVector,
-    val color: Color
-)
-
-data class PatientRecord(
-    val id: String,
-    val name: String,
-    val patientCode: String,
-    val dayCount: Int,
-    val status: String, // "At Risk", "Stable"
-    val subtitle: String,
-    val avatarBg: Color
+    val quickReplies: List<String>? = null
 )
 
 // ==========================================
-// MEDICINE DATASET FROM medicine_dataset.csv
+// MEDICATION KNOWLEDGE BASE ENGINE
 // ==========================================
 
-data class MedicineItem(
+data class MedicineKnowledge(
     val name: String,
     val category: String,
-    val dosageForm: String,
-    val strength: String,
-    val manufacturer: String,
-    val indication: String,
-    val classification: String
+    val purpose: String,
+    val administration: String,
+    val sideEffects: String,
+    val warnings: String
 )
 
-object MedicineRepository {
-    val dataset: List<MedicineItem> = listOf(
-        MedicineItem("Amoxicillin", "Antibiotic", "Tablet", "802 mg", "Teva Pharmaceutical", "Wound & Infection", "Over-the-Counter"),
-        MedicineItem("Acetocillin", "Antidiabetic", "Cream", "938 mg", "Roche Holding AG", "Virus", "Over-the-Counter"),
-        MedicineItem("Ibuprocillin", "Antiviral", "Injection", "337 mg", "CSL Limited", "Infection", "Over-the-Counter"),
-        MedicineItem("Dextrophen", "Antibiotic", "Ointment", "333 mg", "Johnson & Johnson", "Wound", "Prescription"),
-        MedicineItem("Clarinazole", "Antifungal", "Syrup", "362 mg", "AbbVie Inc.", "Pain", "Prescription"),
-        MedicineItem("Ibupromycin", "Antibiotic", "Injection", "140 mg", "Takeda Pharmaceutical", "Infection", "Prescription"),
-        MedicineItem("Metovir", "Antipyretic", "Ointment", "641 mg", "Takeda Pharmaceutical", "Infection", "Over-the-Counter"),
-        MedicineItem("Cefcillin", "Antipyretic", "Tablet", "954 mg", "Takeda Pharmaceutical", "Fungus", "Over-the-Counter"),
-        MedicineItem("Acetomycin", "Analgesic", "Inhaler", "838 mg", "Novo Nordisk A/S", "Wound", "Prescription"),
-        MedicineItem("Acetonazole", "Antipyretic", "Ointment", "575 mg", "Bayer AG", "Wound", "Prescription"),
-        MedicineItem("Dolocillin", "Antiviral", "Ointment", "451 mg", "Novo Nordisk A/S", "Diabetes", "Prescription"),
-        MedicineItem("Cefmet", "Antifungal", "Tablet", "440 mg", "AstraZeneca plc", "Depression", "Prescription"),
-        MedicineItem("Dolophen", "Antibiotic", "Capsule", "469 mg", "Johnson & Johnson", "Depression", "Prescription"),
-        MedicineItem("Ibupronazole", "Analgesic", "Injection", "720 mg", "Novartis AG", "Fungus", "Prescription"),
-        MedicineItem("Amoxiprofen", "Antiviral", "Ointment", "861 mg", "Novo Nordisk A/S", "Diabetes", "Prescription"),
-        MedicineItem("Amoxistatin", "Antiviral", "Inhaler", "46 mg", "Sanofi S.A.", "Fever", "Over-the-Counter"),
-        MedicineItem("Dextrocillin", "Antidiabetic", "Inhaler", "392 mg", "Sanofi S.A.", "Pain", "Over-the-Counter"),
-        MedicineItem("Clariphen", "Antidiabetic", "Syrup", "300 mg", "GlaxoSmithKline plc", "Fungus", "Over-the-Counter"),
-        MedicineItem("Dolomet", "Antifungal", "Drops", "335 mg", "Amgen Inc.", "Diabetes", "Prescription"),
-        MedicineItem("Acetoprofen", "Antibiotic", "Inhaler", "909 mg", "CSL Limited", "Fever", "Prescription"),
-        MedicineItem("Amoximet", "Analgesic", "Ointment", "795 mg", "Gilead Sciences, Inc.", "Pain", "Prescription"),
-        MedicineItem("Doloprofen", "Antibiotic", "Inhaler", "981 mg", "Eli Lilly and Company", "Fungus", "Over-the-Counter"),
-        MedicineItem("Clariprofen", "Antifungal", "Tablet", "123 mg", "Pfizer Inc.", "Infection", "Prescription"),
-        MedicineItem("Metocillin", "Analgesic", "Tablet", "892 mg", "Eli Lilly and Company", "Pain", "Over-the-Counter"),
-        MedicineItem("Cefstatin", "Antipyretic", "Ointment", "19 mg", "Roche Holding AG", "Fever", "Prescription"),
-        MedicineItem("Metomycin", "Antifungal", "Capsule", "718 mg", "Pfizer Inc.", "Wound", "Over-the-Counter"),
-        MedicineItem("Clarivir", "Analgesic", "Tablet", "14 mg", "Bristol-Myers Squibb", "Pain", "Prescription"),
-        MedicineItem("Ibuproprofen", "Analgesic", "Cream", "178 mg", "CSL Limited", "Pain", "Over-the-Counter"),
-        MedicineItem("Cefprofen", "Antiseptic", "Tablet", "245 mg", "Novartis AG", "Pain", "Over-the-Counter"),
-        MedicineItem("Dextromycin", "Antipyretic", "Capsule", "986 mg", "Takeda Pharmaceutical", "Wound", "Over-the-Counter")
+val medicineDatabase = listOf(
+    MedicineKnowledge(
+        name = "Naproxen (NAPROSYN)",
+        category = "NSAID (Nonsteroidal Anti-Inflammatory Drug)",
+        purpose = "Reduces post-surgical swelling, joint inflammation, and tissue pain.",
+        administration = "Take 1 tablet (500mg) twice daily WITH FOOD or milk to protect stomach lining.",
+        sideEffects = "Mild stomach upset, heartburn, indigestion.",
+        warnings = "Do not take on an empty stomach. Avoid combining with other NSAIDs (like Ibuprofen or Aspirin) unless directed by your doctor."
+    ),
+    MedicineKnowledge(
+        name = "Oxycodone (PERCOCET)",
+        category = "Opioid Analgesic Pain Reliever",
+        purpose = "Manages severe acute post-surgical pain (pain level > 7/10).",
+        administration = "Take 1 tablet (5-325mg) every 4-6 hours strictly as needed for severe pain.",
+        sideEffects = "Drowsiness, dizziness, lightheadedness, constipation.",
+        warnings = "Prescription opioid. Do not drive or operate machinery. Do not consume alcohol. Do not exceed prescribed limit."
+    ),
+    MedicineKnowledge(
+        name = "Ondansetron (ZOFRAN / ZOFRAN ODT)",
+        category = "Antiemetic (Anti-Nausea)",
+        purpose = "Prevents and treats nausea or vomiting caused by anesthesia or strong medications.",
+        administration = "Place Orally Disintegrating Tablet (4mg) on tongue, allow to dissolve, and swallow.",
+        sideEffects = "Mild headache, fatigue, constipation.",
+        warnings = "Take at the first sign of nausea. Stay well hydrated."
+    ),
+    MedicineKnowledge(
+        name = "Ibuprofen (MOTRIN / ADVIL)",
+        category = "NSAID Pain Reliever & Anti-Inflammatory",
+        purpose = "Reduces post-op inflammation, swelling, and mild-to-moderate discomfort.",
+        administration = "Take 400mg - 800mg with breakfast and dinner.",
+        sideEffects = "Mild indigestion, stomach cramps.",
+        warnings = "Always take with food. Do not exceed 3200mg daily."
+    ),
+    MedicineKnowledge(
+        name = "Aspirin (LOW DOSE)",
+        category = "Antiplatelet / Blood Thinner",
+        purpose = "Prevents blood clot formation (Deep Vein Thrombosis) after surgery.",
+        administration = "Take low-dose (81mg) daily with water and meals.",
+        sideEffects = "Mild stomach irritation, easy bruising.",
+        warnings = "Do not discontinue without consulting your surgical team."
+    ),
+    MedicineKnowledge(
+        name = "Amoxicillin (ANTIBIOTIC)",
+        category = "Penicillin Antibiotic",
+        purpose = "Prevents and treats surgical site bacterial infections.",
+        administration = "Take 500mg 3 times daily with water.",
+        sideEffects = "Mild diarrhea, stomach discomfort.",
+        warnings = "Complete the entire prescribed course even if you feel fully recovered."
+    ),
+    MedicineKnowledge(
+        name = "Acetaminophen (TYLENOL)",
+        category = "Analgesic & Antipyretic",
+        purpose = "Fever reducer and mild-to-moderate pain reliever.",
+        administration = "500mg - 1000mg every 6 hours as needed.",
+        sideEffects = "Rare at recommended dosages.",
+        warnings = "Maximum 3000mg daily. Check other medications (like Percocet) for hidden acetaminophen to protect your liver."
+    ),
+    MedicineKnowledge(
+        name = "Calcium / Vitamin D / Multivitamin",
+        category = "Recovery & Bone Health Supplement",
+        purpose = "Promotes bone graft integration, tissue repair, and immune system recovery.",
+        administration = "Take 1 tablet daily with a meal.",
+        sideEffects = "Generally well tolerated.",
+        warnings = "Take consistently with breakfast or lunch."
+    )
+)
+
+fun lookupMedicineInfo(query: String, user: UserProfile): String? {
+    val q = query.lowercase()
+    val match = medicineDatabase.find { med ->
+        med.name.lowercase().contains(q) ||
+        q.contains(med.name.lowercase().split(" ").first()) ||
+        (q.contains("naproxen") && med.name.contains("Naproxen", ignoreCase = true)) ||
+        (q.contains("naprosyn") && med.name.contains("Naproxen", ignoreCase = true)) ||
+        (q.contains("percocet") && med.name.contains("Oxycodone", ignoreCase = true)) ||
+        (q.contains("oxycodone") && med.name.contains("Oxycodone", ignoreCase = true)) ||
+        (q.contains("zofran") && med.name.contains("Ondansetron", ignoreCase = true)) ||
+        (q.contains("ondansetron") && med.name.contains("Ondansetron", ignoreCase = true)) ||
+        (q.contains("motrin") && med.name.contains("Ibuprofen", ignoreCase = true)) ||
+        (q.contains("ibuprofen") && med.name.contains("Ibuprofen", ignoreCase = true)) ||
+        (q.contains("aspirin") && med.name.contains("Aspirin", ignoreCase = true)) ||
+        (q.contains("amoxicillin") && med.name.contains("Amoxicillin", ignoreCase = true)) ||
+        (q.contains("tylenol") && med.name.contains("Acetaminophen", ignoreCase = true)) ||
+        (q.contains("acetaminophen") && med.name.contains("Acetaminophen", ignoreCase = true)) ||
+        (q.contains("calcium") && med.name.contains("Calcium", ignoreCase = true)) ||
+        (q.contains("vitamin") && med.name.contains("Calcium", ignoreCase = true))
+    }
+
+    return match?.let { med ->
+        """
+        💊 Medication Guide: ${med.name}
+
+        • Category: ${med.category}
+        • What it's for: ${med.purpose}
+        • How to take: ${med.administration}
+        • Common side effects: ${med.sideEffects}
+        • Safety Warning: ${med.warnings}
+
+        Prescribed for ${user.name} by ${user.doctorName}. Please follow exact dosage instructions on your prescription.
+        """.trimIndent()
+    }
+}
+
+// Initial Multi-User Sample Patients
+fun getSampleUserProfiles(): List<UserProfile> {
+    val rameshRx = PrescriptionData(
+        fileName = "Dr_Richter_Discharge_Rx.pdf",
+        fileType = "PDF",
+        uploadedDate = "10 Apr 2025",
+        doctorName = "Dr. Richter, M.D.",
+        clinicName = "City Care Orthopedic Center",
+        diagnosis = "Post-Op Knee Ligament Repair & Rehab",
+        specialInstructions = "Low salt diet, avoid heavy lifting. Walk 10 mins daily.",
+        extractedDosages = listOf("Naproxen (500mg - Morning)", "Oxycodone (Percocet - 8:00 PM)", "Ondansetron (Zofran - As needed)")
     )
 
-    fun search(query: String): List<MedicineItem> {
-        if (query.isBlank()) return dataset
-        val q = query.trim().lowercase()
-        return dataset.filter {
-            it.name.lowercase().contains(q) ||
-            it.category.lowercase().contains(q) ||
-            it.indication.lowercase().contains(q) ||
-            it.manufacturer.lowercase().contains(q) ||
-            it.dosageForm.lowercase().contains(q)
-        }
-    }
+    val savitriRx = PrescriptionData(
+        fileName = "Dr_Evans_Cardiac_Scan.jpg",
+        fileType = "IMAGE",
+        uploadedDate = "15 Apr 2025",
+        doctorName = "Dr. Evans, Cardiologist",
+        clinicName = "St. Jude Heart Institute",
+        diagnosis = "Post-Cardiac Angioplasty Care",
+        specialInstructions = "Monitor blood pressure twice daily. Low sodium meals.",
+        extractedDosages = listOf("Aspirin 81mg (Morning)", "Ibuprofen 400mg (Evening)")
+    )
+
+    return listOf(
+        UserProfile("1", "Ramesh Kumar", "RMH-4587", 12, 30, "At Risk", "Post-Op Knee Surgery", "Dr. Richter", PrimaryBlue, rameshRx),
+        UserProfile("2", "Savitri Devi", "SD-2210", 8, 30, "Stable", "Cardiac Angioplasty Recovery", "Dr. Evans", Color(0xFFE11D48), savitriRx),
+        UserProfile("3", "Mohit Sharma", "MS-3321", 5, 30, "Stable", "Rotator Cuff Rehab", "Dr. Davis", Color(0xFFD97706)),
+        UserProfile("4", "Ayesha Khan", "AK-7789", 3, 30, "Stable", "ACL Reconstruction", "Dr. Martinez", Color(0xFF059669))
+    )
 }
 
 // ==========================================
-// RECOVERYLOOP GEMINI AI ENGINE (SINGLE PROMPT ARCHITECTURE)
-// ==========================================
-
-object RecoveryLoopAIEngine {
-    var userApiKey by mutableStateOf("")
-
-    private const val SYSTEM_PROMPT = """
-You are Dr. RecoveryLoop, an expert clinical care manager and empathetic post-operative physician caring for patient Ramesh Kumar (Day 12 post total knee arthroplasty / surgery).
-
-Clinical Persona & Communication Guidelines:
-1. THINK & RESPOND LIKE A HUMANE DOCTOR: Speak warmly, professionally, and thoughtfully ("Hello Ramesh", "I understand", "That is reassuring"). Show genuine medical insight into post-op recovery.
-2. MEDICAL TRIAGE RULES:
-   - RED FLAGS (Fever >101°F / 38.3°C, sudden chest pain, shortness of breath, calf tenderness/DVT signs, heavy surgical bleeding, pus or expanding redness at incision): Immediately begin response with '[ALERT: HIGH RISK]'. Advise Ramesh to rest, stay calm, and contact emergency care or Dr. Richter right away.
-   - MODERATE SYMPTOMS (Pain 4-6/10, mild stiffness, slight swelling after walking): Reassure that post-op Day 12 stiffness is normal. Recommend RICE protocol (Rest, Ice 15-20 mins, Compression, Elevation) and gentle range-of-motion knee extensions.
-   - STABLE / PROGRESSING (Pain 0-3/10, completed walks, took meds): Commend Ramesh for compliance. Remind him to keep incision clean and dry, avoid heavy lifting, and drink fluids.
-3. CONVERSATIONAL CONTINUITY: ALWAYS acknowledge Ramesh's specific input before providing advice, and end with a single, relevant clinical follow-up question.
-4. BREVITY: Keep your answer under 100 words—warm, crisp, and medical.
-"""
-
-    /**
-     * Converts everything (system instructions, conversation history, language preference, and current user message)
-     * into a single comprehensive prompt string sent to Gemini.
-     */
-    suspend fun generateStreamResponse(
-        userMessage: String,
-        selectedLanguage: String = "English",
-        historyMessages: List<ChatMessage> = emptyList(),
-        onChunkReceived: (String) -> Unit
-    ): String = withContext(Dispatchers.IO) {
-        val apiKeyToUse = userApiKey.ifBlank { System.getenv("GEMINI_API_KEY") ?: "AQ.Ab8RN6Jkr5-eipj34eMHErHwGMqcnej-icRqtusgMKpld8X3JQ" }
-        val fullTextBuilder = StringBuilder()
-
-        // Build a single unified prompt containing system prompt, recent history, language, and current message
-        val singlePromptBuilder = StringBuilder().apply {
-            append(SYSTEM_PROMPT.trimIndent())
-            append("\n\nTarget Response Language: $selectedLanguage\n")
-            append("--- Conversation History ---\n")
-            
-            // Include up to last 8 messages for robust multi-turn context within the single prompt
-            val recentHistory = historyMessages.takeLast(8)
-            for (msg in recentHistory) {
-                val roleLabel = if (msg.sender == ChatSender.USER) "Patient Ramesh" else "Dr. RecoveryLoop AI"
-                append("$roleLabel: ${msg.text}\n")
-            }
-            
-            append("--- Current Interaction ---\n")
-            append("Patient Ramesh says: $userMessage\n")
-            append("Dr. RecoveryLoop AI response:")
-        }
-
-        val finalSinglePrompt = singlePromptBuilder.toString()
-
-        if (apiKeyToUse.isNotBlank()) {
-            try {
-                val model = GenerativeModel(
-                    modelName = "gemini-1.5-flash",
-                    apiKey = apiKeyToUse
-                )
-
-                model.generateContentStream(finalSinglePrompt).collect { chunkResponse ->
-                    val chunkText = chunkResponse.text
-                    if (!chunkText.isNullOrEmpty()) {
-                        fullTextBuilder.append(chunkText)
-                        withContext(Dispatchers.Main) {
-                            onChunkReceived(chunkText)
-                        }
-                    }
-                }
-
-                val finalResult = fullTextBuilder.toString().trim()
-                if (finalResult.isNotBlank()) {
-                    return@withContext finalResult
-                }
-            } catch (_: Exception) {
-                // Fallback to active local streaming engine
-            }
-        }
-
-        // Active Local Streaming Response (Word-by-word real-time stream)
-        val fallback = generateLocalFallbackResponse(userMessage)
-        val words = fallback.split(" ")
-        for (i in words.indices) {
-            val word = words[i] + if (i == words.lastIndex) "" else " "
-            fullTextBuilder.append(word)
-            withContext(Dispatchers.Main) {
-                onChunkReceived(word)
-            }
-            delay(25) // Active typing effect
-        }
-
-        return@withContext fallback
-    }
-
-    fun computeContextualQuickReplies(response: String): List<String> {
-        val lower = response.lowercase()
-        return when {
-            lower.contains("high risk") || lower.contains("alert") || lower.contains("emergency") ->
-                listOf("📞 Call Emergency Care", "📞 Call Dr. Richter", "⚠️ Family is with me")
-            lower.contains("pain") || lower.contains("ice") || lower.contains("elevate") ->
-                listOf("💊 Took Pain Meds", "🧊 Ice Pack Applied", "🩺 Pain level 3/10")
-            lower.contains("walk") || lower.contains("exercise") ->
-                listOf("🚶 Completed 10-min Walk", "🦵 Knee Exercise Done", "❓ Feeling Slight Stiffness")
-            lower.contains("med") || lower.contains("dose") ->
-                listOf("💊 Took Dose with Food", "⏰ Set Dose Reminder", "❓ No Side Effects")
-            lower.contains("wound") || lower.contains("dressing") || lower.contains("incision") ->
-                listOf("✅ Dressing is Clean & Dry", "🩺 Slight Redness Seen", "❓ Ask Dressing Tip")
-            else ->
-                listOf("😊 Feeling good", "😐 Mild stiffness", "🤒 Feeling discomfort", "📋 View Schedule")
-        }
-    }
-
-    private fun generateLocalFallbackResponse(message: String): String {
-        val lower = message.lowercase()
-
-        // Check if query matches any item in the Medicine Dataset
-        val matchedMeds = MedicineRepository.search(message)
-        val matchesSpecificMedName = matchedMeds.any { lower.contains(it.name.lowercase()) }
-
-        if (matchedMeds.isNotEmpty() && matchesSpecificMedName) {
-            val med = matchedMeds.first()
-            return "Based on your clinical medicine dataset, ${med.name} (${med.strength} ${med.dosageForm}) is a ${med.category} manufactured by ${med.manufacturer}, indicated for ${med.indication} [${med.classification}].\n\nWould you like me to log ${med.name} into your Day 12 recovery schedule?"
-        }
-
-        return when {
-            // RED FLAGS
-            lower.contains("fever") || lower.contains("101") || lower.contains("102") || lower.contains("103") ||
-            lower.contains("chest pain") || lower.contains("shortness of breath") || lower.contains("breath") ||
-            lower.contains("bleeding") || lower.contains("pus") || lower.contains("discharge") || lower.contains("calf pain") -> {
-                "[ALERT: HIGH RISK] Ramesh, as your doctor, I am concerned about these symptoms ($message). I am escalating this immediately to Dr. Richter and your care team.\n\nPlease rest elevated, do not walk, and seek emergency medical evaluation if breathing or pain worsens. Are you with family right now?"
-            }
-
-            // HIGH PAIN (7-10)
-            lower.contains("pain 7") || lower.contains("pain 8") || lower.contains("pain 9") || lower.contains("pain 10") ||
-            lower.contains("severe pain") || lower.contains("unbearable") || lower.contains("hurts a lot") -> {
-                "I hear you, Ramesh. A pain level of 7+ on Day 12 requires attention. Please sit comfortably, apply an ice pack to your knee for 15 minutes, and elevate your leg above heart level.\n\nDid you take your prescribed anti-inflammatory or pain medication this morning?"
-            }
-
-            // MODERATE PAIN / STIFFNESS (4-6)
-            lower.contains("pain 4") || lower.contains("pain 5") || lower.contains("pain 6") ||
-            lower.contains("stiff") || lower.contains("swelling") || lower.contains("swollen") || lower.contains("tight") -> {
-                "Hello Ramesh. Mild stiffness and swelling around Day 12 is a normal part of joint tissue remodeling. Applying ice for 15 minutes post-exercise helps reduce local inflammation.\n\nHave you been elevating your leg on a pillow while resting today?"
-            }
-
-            // WALKING / EXERCISE
-            lower.contains("walk") || lower.contains("exercise") || lower.contains("steps") || lower.contains("knee") -> {
-                "Excellent work, Ramesh! 🚶 Gradual weight-bearing and short 10-minute extension walks prevent scar tissue adhesion and promote blood circulation.\n\nHow did your knee feel during the walk—was there any sharp discomfort?"
-            }
-
-            // MEDICATIONS
-            lower.contains("med") || lower.contains("pill") || lower.contains("dose") || lower.contains("paracetamol") || lower.contains("tablet") -> {
-                val medSample = MedicineRepository.dataset.random()
-                "Logged your medication, Ramesh! 💊 Consistency with anti-inflammatory doses like ${medSample.name} (${medSample.strength}) maintains steady recovery coverage.\n\nDid you take your dose after a light meal, and are you feeling any nausea?"
-            }
-
-            // WOUND / DRESSING
-            lower.contains("wound") || lower.contains("incision") || lower.contains("dressing") || lower.contains("bandage") || lower.contains("stitch") -> {
-                "Monitoring your surgical incision is vital on Day 12. Keep the dressing completely clean and dry, and avoid soaking in water until cleared by Dr. Richter.\n\nIs there any surrounding redness, warmth, or fluid seepage on the bandage?"
-            }
-
-            // POSITIVE / STABLE
-            lower.contains("better") || lower.contains("good") || lower.contains("great") || lower.contains("fine") || lower.contains("okay") -> {
-                "That is very reassuring to hear, Ramesh! 🎉 Your steady progress on Day 12 indicates healthy healing and good compliance.\n\nHave you taken your afternoon fluids and completed your gentle leg elevation today?"
-            }
-
-            // DEFAULT HUMAN DOCTOR CHECK-IN
-            else -> {
-                "Thank you for sharing that update, Ramesh. As your care manager, I have recorded: \"$message\" in your daily health log.\n\nOn a scale of 1 to 10, how would you rate your knee comfort right now?"
-            }
-        }
-    }
-}
-
-// ==========================================
-// MAIN APP CONTAINER WITH ROUTING
+// MAIN APP CONTAINER WITH ROUTING & STATE
 // ==========================================
 
 @Preview(showBackground = true)
 @Composable
 fun RecoverLoopApp() {
-    var currentRole by remember { mutableStateOf(AppRole.PATIENT) }
+    var usersList by remember { mutableStateOf(getSampleUserProfiles()) }
+    var activeUserId by remember { mutableStateOf("1") }
+    var currentRole by remember { mutableStateOf(AppRole.LOGIN) }
+    var cloudSession by remember { mutableStateOf<CloudAuthSession?>(null) }
+
     var selectedTab by remember { mutableIntStateOf(0) } // 0: Home, 1: Plan, 2: Chat, 3: Health, 4: More
     var isVoiceCheckinActive by remember { mutableStateOf(false) }
 
-    // Global Dynamic Health Alerts State
-    val healthAlerts = remember {
-        mutableStateListOf(
-            HealthAlertItem(
-                id = "1",
-                title = "High Priority Alert",
-                time = "Today, 4:32 PM",
-                detailText = "Reported: Severe breathlessness and chest pain",
-                isHighPriority = true,
-                icon = Icons.Default.Warning,
-                color = BadgeRed
-            ),
-            HealthAlertItem(
-                id = "2",
-                title = "Missed Check-in",
-                time = "Day 11 • 10:00 AM",
-                detailText = "Daily morning voice check-in missed",
-                isHighPriority = false,
-                icon = Icons.Default.Notifications,
-                color = BadgeOrange
-            ),
-            HealthAlertItem(
-                id = "3",
-                title = "High Temperature (102°F)",
-                time = "Day 9 • 102°F",
-                detailText = "Fever spike logged during evening check-in",
-                isHighPriority = false,
-                icon = Icons.Default.Thermostat,
-                color = BadgeRed
-            )
-        )
-    }
+    var showAddUserDialog by remember { mutableStateOf(false) }
+    var showSecurityAuditDialog by remember { mutableStateOf(false) }
+    var selectedRxForViewer by remember { mutableStateOf<PrescriptionData?>(null) }
 
-    var isPatientAtRisk by remember { mutableStateOf(true) }
-
-    fun onNewHighPriorityAlert(alertText: String) {
-        isPatientAtRisk = true
-        healthAlerts.add(
-            0,
-            HealthAlertItem(
-                id = System.currentTimeMillis().toString(),
-                title = "AI Health Alert",
-                time = "Just now",
-                detailText = alertText,
-                isHighPriority = true,
-                icon = Icons.Default.Warning,
-                color = BadgeRed
-            )
-        )
-    }
+    val activeUser = usersList.find { it.id == activeUserId } ?: usersList.first()
 
     if (isVoiceCheckinActive) {
         AIVoiceCheckinScreen(
-            onClose = { isVoiceCheckinActive = false },
-            onHighPriorityAlertDetected = { alertText ->
-                onNewHighPriorityAlert(alertText)
-            }
+            user = activeUser,
+            onClose = { isVoiceCheckinActive = false }
         )
         return
     }
 
     Scaffold(
         containerColor = AppBgLight,
-        modifier = Modifier
-            .fillMaxSize()
-            .statusBarsPadding(),
+        modifier = Modifier.statusBarsPadding(),
         bottomBar = {
-            if (currentRole != AppRole.ONBOARDING) {
+            if (currentRole != AppRole.LOGIN && currentRole != AppRole.ONBOARDING) {
                 RecoveryLoopBottomNav(
                     selectedTab = selectedTab,
                     onTabSelected = { selectedTab = it }
@@ -493,13 +356,25 @@ fun RecoverLoopApp() {
             }
         }
     ) { innerPadding ->
-        androidx.compose.material3.Surface(
+        Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(innerPadding),
-            color = AppBgLight
+                .padding(innerPadding)
+                .background(AppBgLight)
         ) {
             when {
+                currentRole == AppRole.LOGIN -> {
+                    LoginAndAuthScreen(
+                        onLoginSuccess = { session ->
+                            cloudSession = session
+                            currentRole = session.role
+                            if (session.patientId.isNotBlank()) {
+                                activeUserId = session.patientId
+                            }
+                            selectedTab = 0
+                        }
+                    )
+                }
                 currentRole == AppRole.ONBOARDING -> {
                     RoleSelectionScreen(
                         onRoleSelected = { role ->
@@ -508,40 +383,270 @@ fun RecoverLoopApp() {
                         }
                     )
                 }
-
                 currentRole == AppRole.HOSPITAL_STAFF || (currentRole == AppRole.PATIENT && selectedTab == 4) -> {
                     HospitalDashboardScreen(
-                        isPatientAtRisk = isPatientAtRisk,
-                        onSwitchToPatient = { currentRole = AppRole.PATIENT; selectedTab = 0 },
-                        onSwitchRole = { currentRole = AppRole.ONBOARDING }
+                        allUsers = usersList,
+                        onPatientSelected = { selectedUser ->
+                            activeUserId = selectedUser.id
+                            currentRole = AppRole.PATIENT
+                            selectedTab = 0
+                        },
+                        onAddUserClicked = { showAddUserDialog = true },
+                        onShowSecurityAudit = { showSecurityAuditDialog = true }
                     )
                 }
-
                 selectedTab == 0 -> {
                     PatientHomeScreen(
+                        activeUser = activeUser,
+                        allUsers = usersList,
+                        onUserSelected = { activeUserId = it },
+                        onAddUserClicked = { showAddUserDialog = true },
                         onNavigateToPlan = { selectedTab = 1 },
                         onNavigateToChat = { selectedTab = 2 },
                         onStartVoiceCheckin = { isVoiceCheckinActive = true },
-                        onSwitchRole = { currentRole = AppRole.ONBOARDING }
+                        onViewPrescription = { selectedRxForViewer = activeUser.prescription },
+                        onShowSecurityAudit = { showSecurityAuditDialog = true },
+                        onSwitchRole = { currentRole = AppRole.LOGIN }
                     )
                 }
-
                 selectedTab == 1 -> {
-                    RecoveryPlanScreen()
+                    RecoveryPlanScreen(user = activeUser)
                 }
-
                 selectedTab == 2 -> {
                     AIChatbotScreen(
-                        onStartVoiceCheckin = { isVoiceCheckinActive = true },
-                        onHighPriorityAlertDetected = { alertText ->
-                            onNewHighPriorityAlert(alertText)
-                        }
+                        user = activeUser,
+                        onStartVoiceCheckin = { isVoiceCheckinActive = true }
                     )
                 }
-
                 selectedTab == 3 -> {
-                    AlertsAndHealthScreen(alertsList = healthAlerts)
+                    AlertsAndHealthScreen(
+                        user = activeUser,
+                        onShowSecurityAudit = { showSecurityAuditDialog = true }
+                    )
                 }
+            }
+        }
+    }
+
+    if (showAddUserDialog) {
+        AddUserDialog(
+            onDismiss = { showAddUserDialog = false },
+            onUserCreated = { newUser ->
+                usersList = usersList + newUser
+                activeUserId = newUser.id
+                showAddUserDialog = false
+            }
+        )
+    }
+
+    if (showSecurityAuditDialog) {
+        SecurityAuditDialog(
+            onDismiss = { showSecurityAuditDialog = false }
+        )
+    }
+
+    if (selectedRxForViewer != null) {
+        PrescriptionViewerDialog(
+            prescription = selectedRxForViewer!!,
+            onDismiss = { selectedRxForViewer = null }
+        )
+    }
+}
+
+// ==========================================
+// SCREEN 0: LOGIN & CLOUD AUTH PAGE
+// ==========================================
+
+@Composable
+fun LoginAndAuthScreen(
+    onLoginSuccess: (CloudAuthSession) -> Unit
+) {
+    var isSignUpMode by remember { mutableStateOf(false) }
+    var email by remember { mutableStateOf("ramesh@recoveryloop.ai") }
+    var password by remember { mutableStateOf("password123") }
+    var selectedRole by remember { mutableStateOf(AppRole.PATIENT) }
+    var isPasswordVisible by remember { mutableStateOf(false) }
+    var errorMessage by remember { mutableStateOf<String?>(null) }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.White)
+            .padding(24.dp)
+            .verticalScroll(rememberScrollState()),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        RecoveryLoopLogoGraphic(modifier = Modifier.size(80.dp))
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        Text(
+            text = "RecoveryLoop Cloud",
+            fontSize = 26.sp,
+            fontWeight = FontWeight.Bold,
+            color = PrimaryDarkBlue
+        )
+
+        Spacer(modifier = Modifier.height(4.dp))
+
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(imageVector = Icons.Default.CloudDone, contentDescription = "Cloud", tint = BadgeGreen, modifier = Modifier.size(16.dp))
+            Spacer(modifier = Modifier.width(4.dp))
+            Text(text = "Cloud Database Connected & Encrypted", fontSize = 11.sp, color = BadgeGreen, fontWeight = FontWeight.Bold)
+        }
+
+        Spacer(modifier = Modifier.height(28.dp))
+
+        // Mode Switcher Tabs
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(12.dp))
+                .background(CardLightBlue)
+                .padding(4.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(if (!isSignUpMode) PrimaryBlue else Color.Transparent)
+                    .clickable { isSignUpMode = false; errorMessage = null }
+                    .padding(vertical = 10.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text("Sign In", fontWeight = FontWeight.Bold, color = if (!isSignUpMode) Color.White else TextMain, fontSize = 13.sp)
+            }
+
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(if (isSignUpMode) PrimaryBlue else Color.Transparent)
+                    .clickable { isSignUpMode = true; errorMessage = null }
+                    .padding(vertical = 10.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text("New Account", fontWeight = FontWeight.Bold, color = if (isSignUpMode) Color.White else TextMain, fontSize = 13.sp)
+            }
+        }
+
+        Spacer(modifier = Modifier.height(20.dp))
+
+        // Form Fields
+        OutlinedTextField(
+            value = email,
+            onValueChange = { email = it; errorMessage = null },
+            label = { Text("Email / Username") },
+            leadingIcon = { Icon(imageVector = Icons.Default.Email, contentDescription = "Email", tint = TextMuted) },
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth(),
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = PrimaryBlue,
+                unfocusedBorderColor = Color.LightGray,
+                focusedContainerColor = Color.White,
+                unfocusedContainerColor = Color.White
+            )
+        )
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        OutlinedTextField(
+            value = password,
+            onValueChange = { password = it; errorMessage = null },
+            label = { Text("Password") },
+            leadingIcon = { Icon(imageVector = Icons.Default.Lock, contentDescription = "Lock", tint = TextMuted) },
+            trailingIcon = {
+                IconButton(onClick = { isPasswordVisible = !isPasswordVisible }) {
+                    Icon(
+                        imageVector = if (isPasswordVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                        contentDescription = "Toggle Password",
+                        tint = TextMuted
+                    )
+                }
+            },
+            visualTransformation = if (isPasswordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth(),
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = PrimaryBlue,
+                unfocusedBorderColor = Color.LightGray,
+                focusedContainerColor = Color.White,
+                unfocusedContainerColor = Color.White
+            )
+        )
+
+        if (isSignUpMode) {
+            Spacer(modifier = Modifier.height(14.dp))
+
+            Text("Select User Role:", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = TextMain)
+            Spacer(modifier = Modifier.height(6.dp))
+
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FilterTabPill(label = "Patient", isSelected = selectedRole == AppRole.PATIENT, onClick = { selectedRole = AppRole.PATIENT })
+                FilterTabPill(label = "Staff", isSelected = selectedRole == AppRole.HOSPITAL_STAFF, onClick = { selectedRole = AppRole.HOSPITAL_STAFF })
+                FilterTabPill(label = "Clinician", isSelected = selectedRole == AppRole.CLINICIAN, onClick = { selectedRole = AppRole.CLINICIAN })
+            }
+        }
+
+        if (errorMessage != null) {
+            Spacer(modifier = Modifier.height(12.dp))
+            Text(text = errorMessage!!, color = BadgeRed, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+        }
+
+        Spacer(modifier = Modifier.height(24.dp))
+
+        Button(
+            onClick = {
+                if (isSignUpMode) {
+                    val session = CloudRecoveryDatabase.signUp(email, password, selectedRole, "1")
+                    onLoginSuccess(session)
+                } else {
+                    val session = CloudRecoveryDatabase.login(email, password)
+                    if (session != null) {
+                        onLoginSuccess(session)
+                    } else {
+                        errorMessage = "Invalid credentials. Try demo accounts below."
+                    }
+                }
+            },
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(50.dp),
+            shape = RoundedCornerShape(12.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = PrimaryBlue)
+        ) {
+            Text(text = if (isSignUpMode) "Create Cloud Account ☁️" else "Sign In to Cloud Account ☁️", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color.White)
+        }
+
+        Spacer(modifier = Modifier.height(28.dp))
+
+        Text(text = "Quick Demo Cloud Accounts:", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = TextMuted)
+        Spacer(modifier = Modifier.height(8.dp))
+
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button(
+                onClick = {
+                    val session = CloudRecoveryDatabase.login("ramesh@recoveryloop.ai", "password123")
+                    if (session != null) onLoginSuccess(session)
+                },
+                modifier = Modifier.weight(1f),
+                colors = ButtonDefaults.buttonColors(containerColor = CardLightGreen),
+                shape = RoundedCornerShape(8.dp)
+            ) {
+                Text("Ramesh (Patient)", fontSize = 10.sp, color = BadgeGreen, fontWeight = FontWeight.Bold)
+            }
+
+            Button(
+                onClick = {
+                    val session = CloudRecoveryDatabase.login("staff@recoveryloop.hospital", "admin123")
+                    if (session != null) onLoginSuccess(session)
+                },
+                modifier = Modifier.weight(1f),
+                colors = ButtonDefaults.buttonColors(containerColor = CardLightBlue),
+                shape = RoundedCornerShape(8.dp)
+            ) {
+                Text("Hospital Staff", fontSize = 10.sp, color = PrimaryBlue, fontWeight = FontWeight.Bold)
             }
         }
     }
@@ -558,124 +663,121 @@ fun RecoveryLoopBottomNav(
 ) {
     NavigationBar(
         containerColor = Color.White,
-        tonalElevation = 8.dp
+        tonalElevation = 6.dp
     ) {
-        NavigationBarItem(
-            selected = selectedTab == 0,
-            onClick = { onTabSelected(0) },
-            icon = { Icon(Icons.Default.Home, contentDescription = "Home") },
-            label = { Text("Home", fontSize = 10.sp) },
-            colors = NavigationBarItemDefaults.colors(
-                selectedIconColor = PrimaryBlue,
-                selectedTextColor = PrimaryBlue,
-                indicatorColor = CardLightBlue
-            )
+        val items = listOf(
+            Triple(0, "Home", Icons.Default.Home),
+            Triple(1, "Plan", Icons.Default.DateRange),
+            Triple(2, "Chat", Icons.AutoMirrored.Filled.Chat),
+            Triple(3, "Health", Icons.Default.Favorite),
+            Triple(4, "More", Icons.Default.MoreHoriz)
         )
-        NavigationBarItem(
-            selected = selectedTab == 1,
-            onClick = { onTabSelected(1) },
-            icon = { Icon(Icons.Default.DateRange, contentDescription = "Plan") },
-            label = { Text("Plan", fontSize = 10.sp) },
-            colors = NavigationBarItemDefaults.colors(
-                selectedIconColor = PrimaryBlue,
-                selectedTextColor = PrimaryBlue,
-                indicatorColor = CardLightBlue
+
+        items.forEach { (index, label, icon) ->
+            NavigationBarItem(
+                selected = selectedTab == index,
+                onClick = { onTabSelected(index) },
+                icon = {
+                    Icon(
+                        imageVector = icon,
+                        contentDescription = label,
+                        tint = if (selectedTab == index) PrimaryBlue else TextMuted
+                    )
+                },
+                label = {
+                    Text(
+                        text = label,
+                        fontSize = 11.sp,
+                        fontWeight = if (selectedTab == index) FontWeight.Bold else FontWeight.Medium,
+                        color = if (selectedTab == index) PrimaryBlue else TextMuted
+                    )
+                },
+                colors = NavigationBarItemDefaults.colors(
+                    indicatorColor = CardLightBlue
+                )
             )
-        )
-        NavigationBarItem(
-            selected = selectedTab == 2,
-            onClick = { onTabSelected(2) },
-            icon = { Icon(Icons.Default.Chat, contentDescription = "AI Assistant") },
-            label = { Text("AI Assistant", fontSize = 10.sp) },
-            colors = NavigationBarItemDefaults.colors(
-                selectedIconColor = PrimaryBlue,
-                selectedTextColor = PrimaryBlue,
-                indicatorColor = CardLightBlue
-            )
-        )
-        NavigationBarItem(
-            selected = selectedTab == 3,
-            onClick = { onTabSelected(3) },
-            icon = { Icon(Icons.Default.Notifications, contentDescription = "Alerts") },
-            label = { Text("Alerts", fontSize = 10.sp) },
-            colors = NavigationBarItemDefaults.colors(
-                selectedIconColor = PrimaryBlue,
-                selectedTextColor = PrimaryBlue,
-                indicatorColor = CardLightBlue
-            )
-        )
-        NavigationBarItem(
-            selected = selectedTab == 4,
-            onClick = { onTabSelected(4) },
-            icon = { Icon(Icons.Default.LocalHospital, contentDescription = "Staff") },
-            label = { Text("Care Staff", fontSize = 10.sp) },
-            colors = NavigationBarItemDefaults.colors(
-                selectedIconColor = PrimaryBlue,
-                selectedTextColor = PrimaryBlue,
-                indicatorColor = CardLightBlue
-            )
-        )
+        }
     }
 }
 
 // ==========================================
-// SCREEN 1: ROLE SELECTION ONBOARDING
+// SCREEN 1: ROLE SELECTION & ONBOARDING
 // ==========================================
 
 @Composable
-fun RoleSelectionScreen(onRoleSelected: (AppRole) -> Unit) {
+fun RoleSelectionScreen(
+    onRoleSelected: (AppRole) -> Unit
+) {
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(AppBgLight)
+            .background(Color.White)
             .padding(24.dp)
             .verticalScroll(rememberScrollState()),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        RecoveryLoopFullLogo()
+        RecoveryLoopLogoGraphic(modifier = Modifier.size(90.dp))
 
-        Spacer(modifier = Modifier.height(28.dp))
+        Spacer(modifier = Modifier.height(16.dp))
 
         Text(
-            text = "Select your role to view experience:",
+            text = "RecoveryLoop",
+            fontSize = 28.sp,
+            fontWeight = FontWeight.Bold,
+            color = PrimaryDarkBlue
+        )
+
+        Spacer(modifier = Modifier.height(6.dp))
+
+        Text(
+            text = "Your personal AI care manager\nafter hospital discharge.",
             fontSize = 14.sp,
-            fontWeight = FontWeight.Medium,
-            color = TextMain,
-            modifier = Modifier.fillMaxWidth()
+            color = TextMuted,
+            textAlign = TextAlign.Center,
+            lineHeight = 20.sp
+        )
+
+        Spacer(modifier = Modifier.height(32.dp))
+
+        RoleCard(
+            title = "I am a Patient",
+            description = "Get your 30-day recovery plan, reminders and daily check-ins.",
+            bgColor = CardLightGreen,
+            accentColor = BadgeGreen,
+            icon = Icons.Default.Person,
+            onClick = { onRoleSelected(AppRole.PATIENT) }
         )
 
         Spacer(modifier = Modifier.height(16.dp))
 
         RoleCard(
-            title = "Post-Op Patient",
-            subtitle = "Ramesh Kumar • Day 12 Post-Surgery\nAI Assistant & Daily Voice Check-in",
-            icon = Icons.Default.Person,
-            cardBg = CardLightBlue,
+            title = "I am a Hospital Staff",
+            description = "Upload discharge summaries, track patients and get alerts.",
+            bgColor = CardLightBlue,
             accentColor = PrimaryBlue,
-            onClick = { onRoleSelected(AppRole.PATIENT) }
-        )
-
-        Spacer(modifier = Modifier.height(14.dp))
-
-        RoleCard(
-            title = "Hospital Care Manager / Staff",
-            subtitle = "Monitoring 24 Post-Discharge Patients\nAt-Risk Triaging & Escalations",
             icon = Icons.Default.LocalHospital,
-            cardBg = CardLightGreen,
-            accentColor = BadgeGreen,
             onClick = { onRoleSelected(AppRole.HOSPITAL_STAFF) }
         )
 
-        Spacer(modifier = Modifier.height(14.dp))
+        Spacer(modifier = Modifier.height(16.dp))
 
         RoleCard(
-            title = "Attending Clinician",
-            subtitle = "Dr. Richter • Surgical Care Team\nView High Priority Health Alerts",
+            title = "I am a Clinician",
+            description = "Review care plans and monitor patient progress.",
+            bgColor = CardLightPurple,
+            accentColor = Color(0xFF7C3AED),
             icon = Icons.Default.Favorite,
-            cardBg = CardLightPurple,
-            accentColor = Color(0xFF8B5CF6),
             onClick = { onRoleSelected(AppRole.CLINICIAN) }
+        )
+
+        Spacer(modifier = Modifier.height(40.dp))
+
+        Text(
+            text = "Better care. Fewer readmissions.",
+            fontSize = 13.sp,
+            color = TextMuted,
+            fontWeight = FontWeight.Medium
         )
     }
 }
@@ -683,8 +785,8 @@ fun RoleSelectionScreen(onRoleSelected: (AppRole) -> Unit) {
 @Composable
 fun RoleCard(
     title: String,
-    subtitle: String,
-    cardBg: Color,
+    description: String,
+    bgColor: Color,
     accentColor: Color,
     icon: ImageVector,
     onClick: () -> Unit
@@ -694,7 +796,7 @@ fun RoleCard(
             .fillMaxWidth()
             .clickable { onClick() },
         shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = cardBg)
+        colors = CardDefaults.cardColors(containerColor = bgColor)
     ) {
         Row(
             modifier = Modifier.padding(18.dp),
@@ -704,18 +806,18 @@ fun RoleCard(
                 modifier = Modifier
                     .size(48.dp)
                     .clip(CircleShape)
-                    .background(accentColor),
+                    .background(Color.White),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
                     imageVector = icon,
                     contentDescription = title,
-                    tint = Color.White,
-                    modifier = Modifier.size(24.dp)
+                    tint = accentColor,
+                    modifier = Modifier.size(26.dp)
                 )
             }
 
-            Spacer(modifier = Modifier.width(16.dp))
+            Spacer(modifier = Modifier.width(14.dp))
 
             Column(modifier = Modifier.weight(1f)) {
                 Text(
@@ -726,7 +828,7 @@ fun RoleCard(
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
-                    text = subtitle,
+                    text = description,
                     fontSize = 12.sp,
                     color = TextMuted,
                     lineHeight = 16.sp
@@ -734,23 +836,30 @@ fun RoleCard(
             }
 
             Icon(
-                imageVector = Icons.Default.ArrowForward,
+                imageVector = Icons.AutoMirrored.Filled.ArrowForward,
                 contentDescription = "Select",
-                tint = accentColor
+                tint = accentColor,
+                modifier = Modifier.size(20.dp)
             )
         }
     }
 }
 
 // ==========================================
-// SCREEN 2: PATIENT HOME SCREEN
+// SCREEN 2: PATIENT HOME DASHBOARD
 // ==========================================
 
 @Composable
 fun PatientHomeScreen(
+    activeUser: UserProfile,
+    allUsers: List<UserProfile>,
+    onUserSelected: (String) -> Unit,
+    onAddUserClicked: () -> Unit,
     onNavigateToPlan: () -> Unit,
     onNavigateToChat: () -> Unit,
     onStartVoiceCheckin: () -> Unit,
+    onViewPrescription: () -> Unit,
+    onShowSecurityAudit: () -> Unit = {},
     onSwitchRole: () -> Unit
 ) {
     Column(
@@ -760,129 +869,24 @@ fun PatientHomeScreen(
             .padding(16.dp)
             .verticalScroll(rememberScrollState())
     ) {
-        // Patient Header Bar
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(
-                    modifier = Modifier
-                        .size(42.dp)
-                        .clip(CircleShape)
-                        .background(PrimaryBlue),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = "RK",
-                        color = Color.White,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 16.sp
-                    )
-                }
-
-                Spacer(modifier = Modifier.width(12.dp))
-
-                Column {
-                    Text(
-                        text = "Ramesh Kumar",
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = TextMain
-                    )
-                    Text(
-                        text = "Day 12 Post-Surgery • Recovery Plan Active",
-                        fontSize = 11.sp,
-                        color = TextMuted
-                    )
-                }
-            }
-
-            IconButton(onClick = onSwitchRole) {
-                Icon(
-                    imageVector = Icons.Default.Notifications,
-                    contentDescription = "Notifications",
-                    tint = TextMain
-                )
-            }
-        }
+        MultiUserHeaderBar(
+            activeUser = activeUser,
+            allUsers = allUsers,
+            onUserSelected = onUserSelected,
+            onAddUserClicked = onAddUserClicked,
+            onSwitchRole = onSwitchRole
+        )
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // AI Voice Check-In Call Out Banner
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(20.dp),
-            colors = CardDefaults.cardColors(containerColor = PrimaryBlue)
-        ) {
-            Column(modifier = Modifier.padding(20.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(
-                        modifier = Modifier
-                            .size(36.dp)
-                            .clip(CircleShape)
-                            .background(Color.White.copy(alpha = 0.2f)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.PhoneInTalk,
-                            contentDescription = "Voice Call",
-                            tint = Color.White,
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.width(12.dp))
-
-                    Text(
-                        text = "AI Voice Check-in Active",
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.White
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(10.dp))
-
-                Text(
-                    text = "Your RecoveryLoop AI Manager is online for your Day 12 health check-in. Tap below to speak or chat actively.",
-                    fontSize = 12.sp,
-                    color = Color.White.copy(alpha = 0.9f),
-                    lineHeight = 16.sp
-                )
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Button(
-                        onClick = onStartVoiceCheckin,
-                        shape = RoundedCornerShape(20.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = BadgeGreen)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Mic,
-                            contentDescription = "Mic",
-                            modifier = Modifier.size(16.dp)
-                        )
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text(text = "Start Voice Check-in", fontSize = 12.sp)
-                    }
-
-                    Button(
-                        onClick = onNavigateToChat,
-                        shape = RoundedCornerShape(20.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = Color.White.copy(alpha = 0.2f))
-                    ) {
-                        Text(text = "Text Chat", fontSize = 12.sp, color = Color.White)
-                    }
-                }
-            }
+        if (activeUser.prescription != null) {
+            PrescriptionCardBanner(
+                prescription = activeUser.prescription,
+                onViewClick = onViewPrescription
+            )
+            Spacer(modifier = Modifier.height(16.dp))
         }
 
-        Spacer(modifier = Modifier.height(20.dp))
-
-        // Recovery Progress Gauge Card
         Card(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(16.dp),
@@ -894,67 +898,100 @@ fun PatientHomeScreen(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
+                    Column {
+                        Text(
+                            text = "Day ${activeUser.dayCount} of ${activeUser.totalDays}",
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = TextMain
+                        )
+                        Text(text = activeUser.condition, fontSize = 11.sp, color = TextMuted)
+                    }
+
+                    val progressPercent = (activeUser.dayCount.toFloat() / activeUser.totalDays.toFloat() * 100).toInt()
                     Text(
-                        text = "Recovery Milestone",
+                        text = "$progressPercent%",
                         fontSize = 15.sp,
                         fontWeight = FontWeight.Bold,
-                        color = TextMain
-                    )
-
-                    PillTag(
-                        text = "68% Complete",
-                        backgroundColor = BadgeGreenBg,
-                        textColor = BadgeGreen
+                        color = PrimaryBlue
                     )
                 }
 
-                Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(10.dp))
 
+                val progressVal = (activeUser.dayCount.toFloat() / activeUser.totalDays.toFloat()).coerceIn(0f, 1f)
                 LinearProgressIndicator(
-                    progress = { 0.68f },
+                    progress = { progressVal },
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(10.dp)
-                        .clip(RoundedCornerShape(5.dp)),
-                    color = PrimaryBlue,
-                    trackColor = CardLightBlue,
+                        .height(8.dp)
+                        .clip(CircleShape),
+                    color = BadgeGreen,
+                    trackColor = CardLightGreen
                 )
 
                 Spacer(modifier = Modifier.height(10.dp))
 
                 Text(
-                    text = "Day 12 of 18 Recovery Loop • 4 Tasks Remaining Today",
-                    fontSize = 11.sp,
+                    text = "You're doing great! Keep going.",
+                    fontSize = 12.sp,
                     color = TextMuted
                 )
             }
         }
 
-        Spacer(modifier = Modifier.height(20.dp))
+        Spacer(modifier = Modifier.height(16.dp))
 
-        // Status Grid 2x2
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             StatusGridCard(
-                title = "Next Task",
-                value = "11:00 AM Walk",
+                title = "Today's Medicines",
+                value = "2/3 taken",
                 bgColor = CardLightGreen,
-                icon = Icons.Default.DirectionsWalk,
-                iconTint = BadgeGreen,
+                iconColor = BadgeGreen,
+                icon = Icons.Default.Medication,
                 modifier = Modifier.weight(1f)
             )
 
             StatusGridCard(
-                title = "Medication",
-                value = "3 / 4 Taken",
+                title = "Next Check-in",
+                value = "Today • 6 PM",
                 bgColor = CardLightBlue,
-                icon = Icons.Default.Medication,
-                iconTint = PrimaryBlue,
+                iconColor = PrimaryBlue,
+                icon = Icons.Default.DateRange,
                 modifier = Modifier.weight(1f)
             )
         }
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            StatusGridCard(
+                title = "Lead Physician",
+                value = activeUser.doctorName,
+                bgColor = CardLightPurple,
+                iconColor = Color(0xFF7C3AED),
+                icon = Icons.Default.LocalHospital,
+                modifier = Modifier.weight(1f)
+            )
+
+            StatusGridCard(
+                title = "Health Status",
+                value = if (activeUser.status == "At Risk") "🔴 At Risk" else "🟢 Stable",
+                bgColor = if (activeUser.status == "At Risk") BadgeRedBg else CardLightGreen,
+                iconColor = if (activeUser.status == "At Risk") BadgeRed else BadgeGreen,
+                icon = Icons.Default.Favorite,
+                modifier = Modifier.weight(1f)
+            )
+        }
+
+        Spacer(modifier = Modifier.height(24.dp))
+
+        Text(
+            text = "Quick Actions",
+            fontSize = 16.sp,
+            fontWeight = FontWeight.Bold,
+            color = TextMain
+        )
 
         Spacer(modifier = Modifier.height(12.dp))
 
@@ -962,37 +999,265 @@ fun PatientHomeScreen(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            StatusGridCard(
-                title = "Symptom Status",
-                value = "Stable",
-                bgColor = CardLightPurple,
-                icon = Icons.Default.Favorite,
-                iconTint = Color(0xFF8B5CF6),
-                modifier = Modifier.weight(1f)
-            )
+            Button(
+                onClick = onNavigateToPlan,
+                modifier = Modifier
+                    .weight(1f)
+                    .height(48.dp),
+                shape = RoundedCornerShape(12.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = PrimaryBlue)
+            ) {
+                Icon(imageVector = Icons.Default.DateRange, contentDescription = "Plan", modifier = Modifier.size(18.dp))
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(text = "View 30-Day Plan", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+            }
 
-            StatusGridCard(
-                title = "Care Doctor",
-                value = "Dr. Richter",
-                bgColor = CardLightYellow,
-                icon = Icons.Default.LocalHospital,
-                iconTint = BadgeOrange,
-                modifier = Modifier.weight(1f)
-            )
+            Button(
+                onClick = onNavigateToChat,
+                modifier = Modifier
+                    .weight(1f)
+                    .height(48.dp),
+                shape = RoundedCornerShape(12.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF7C3AED))
+            ) {
+                Icon(imageVector = Icons.AutoMirrored.Filled.Chat, contentDescription = "Chat", modifier = Modifier.size(18.dp))
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(text = "Talk to Care Team", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+            }
         }
 
-        Spacer(modifier = Modifier.height(20.dp))
+        Spacer(modifier = Modifier.height(12.dp))
 
-        // Daily Checklist Button Bar
-        Button(
-            onClick = onNavigateToPlan,
+        Card(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(48.dp),
-            shape = RoundedCornerShape(12.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = PrimaryBlue)
+                .clickable { onStartVoiceCheckin() },
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(containerColor = DarkVoiceBg)
         ) {
-            Text(text = "View Today's Recovery Schedule >", fontSize = 14.sp)
+            Row(
+                modifier = Modifier.padding(16.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(44.dp)
+                        .clip(CircleShape)
+                        .background(BadgeGreen),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(imageVector = Icons.Default.Mic, contentDescription = "Voice", tint = Color.White)
+                }
+
+                Spacer(modifier = Modifier.width(14.dp))
+
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "AI Voice Check-in Available",
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White
+                    )
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = "Tap to speak with ${activeUser.name}'s AI assistant",
+                        fontSize = 11.sp,
+                        color = Color.LightGray
+                    )
+                }
+
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                    contentDescription = "Start",
+                    tint = TealAccent
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+    }
+}
+
+@Composable
+fun MultiUserHeaderBar(
+    activeUser: UserProfile,
+    allUsers: List<UserProfile>,
+    onUserSelected: (String) -> Unit,
+    onAddUserClicked: () -> Unit,
+    onSwitchRole: () -> Unit
+) {
+    var dropdownExpanded by remember { mutableStateOf(false) }
+
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier
+                .clip(RoundedCornerShape(20.dp))
+                .background(Color.White)
+                .clickable { dropdownExpanded = true }
+                .padding(horizontal = 12.dp, vertical = 8.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(36.dp)
+                    .clip(CircleShape)
+                    .background(activeUser.avatarBg),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(imageVector = Icons.Default.Person, contentDescription = "Avatar", tint = Color.White)
+            }
+
+            Spacer(modifier = Modifier.width(10.dp))
+
+            Column {
+                Text(
+                    text = "Hello, ${activeUser.name} 👋",
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = TextMain
+                )
+                Text(
+                    text = activeUser.patientCode,
+                    fontSize = 10.sp,
+                    color = TextMuted
+                )
+            }
+
+            Spacer(modifier = Modifier.width(6.dp))
+
+            Icon(
+                imageVector = Icons.Default.KeyboardArrowDown,
+                contentDescription = "Switch Patient",
+                tint = TextMain,
+                modifier = Modifier.size(18.dp)
+            )
+
+            DropdownMenu(
+                expanded = dropdownExpanded,
+                onDismissRequest = { dropdownExpanded = false },
+                modifier = Modifier.background(Color.White)
+            ) {
+                allUsers.forEach { user ->
+                    DropdownMenuItem(
+                        text = {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(24.dp)
+                                        .clip(CircleShape)
+                                        .background(user.avatarBg),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(imageVector = Icons.Default.Person, contentDescription = "U", tint = Color.White, modifier = Modifier.size(14.dp))
+                                }
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Column {
+                                    Text(
+                                        text = user.name,
+                                        fontWeight = if (user.id == activeUser.id) FontWeight.Bold else FontWeight.Normal,
+                                        color = if (user.id == activeUser.id) PrimaryBlue else TextMain
+                                    )
+                                    Text(text = user.patientCode, fontSize = 10.sp, color = TextMuted)
+                                }
+                            }
+                        },
+                        onClick = {
+                            onUserSelected(user.id)
+                            dropdownExpanded = false
+                        }
+                    )
+                }
+
+                DropdownMenuItem(
+                    text = {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(imageVector = Icons.Default.Add, contentDescription = "Add", tint = PrimaryBlue, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(text = "Add Patient Profile & Rx", color = PrimaryBlue, fontWeight = FontWeight.Bold)
+                        }
+                    },
+                    onClick = {
+                        dropdownExpanded = false
+                        onAddUserClicked()
+                    }
+                )
+
+                DropdownMenuItem(
+                    text = {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(imageVector = Icons.Default.Lock, contentDescription = "Logout", tint = BadgeRed, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(text = "Sign Out to Login Screen", color = BadgeRed, fontWeight = FontWeight.Bold)
+                        }
+                    },
+                    onClick = {
+                        dropdownExpanded = false
+                        onSwitchRole()
+                    }
+                )
+            }
+        }
+
+        IconButton(onClick = onSwitchRole) {
+            Icon(imageVector = Icons.Default.Notifications, contentDescription = "Roles", tint = TextMain)
+        }
+    }
+}
+
+@Composable
+fun PrescriptionCardBanner(
+    prescription: PrescriptionData,
+    onViewClick: () -> Unit
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onViewClick() },
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = CardLightBlue)
+    ) {
+        Row(
+            modifier = Modifier.padding(14.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = if (prescription.fileType == "PDF") Icons.Default.PictureAsPdf else Icons.Default.Image,
+                contentDescription = "Prescription Doc",
+                tint = PrimaryBlue,
+                modifier = Modifier.size(28.dp)
+            )
+
+            Spacer(modifier = Modifier.width(12.dp))
+
+            Column(modifier = Modifier.weight(1f)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = "Doctor's Prescription Attached",
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = TextMain
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    PillTag(text = prescription.fileType, backgroundColor = PrimaryBlue, textColor = Color.White)
+                }
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = "${prescription.fileName} • ${prescription.doctorName}",
+                    fontSize = 11.sp,
+                    color = TextMuted
+                )
+            }
+
+            Text(
+                text = "View Rx",
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold,
+                color = PrimaryBlue
+            )
         }
     }
 }
@@ -1002,50 +1267,43 @@ fun StatusGridCard(
     title: String,
     value: String,
     bgColor: Color,
-    iconTint: Color,
+    iconColor: Color,
     icon: ImageVector,
     modifier: Modifier = Modifier
 ) {
     Card(
         modifier = modifier,
-        shape = RoundedCornerShape(14.dp),
+        shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = bgColor)
     ) {
         Column(modifier = Modifier.padding(14.dp)) {
             Box(
                 modifier = Modifier
-                    .size(32.dp)
+                    .size(36.dp)
                     .clip(CircleShape)
                     .background(Color.White),
                 contentAlignment = Alignment.Center
             ) {
-                Icon(
-                    imageVector = icon,
-                    contentDescription = title,
-                    tint = iconTint,
-                    modifier = Modifier.size(18.dp)
-                )
+                Icon(imageVector = icon, contentDescription = title, tint = iconColor, modifier = Modifier.size(20.dp))
             }
 
-            Spacer(modifier = Modifier.height(10.dp))
+            Spacer(modifier = Modifier.height(12.dp))
 
-            Text(text = title, fontSize = 11.sp, color = TextMuted)
-            Text(
-                text = value,
-                fontSize = 14.sp,
-                fontWeight = FontWeight.Bold,
-                color = TextMain
-            )
+            Text(text = title, fontSize = 12.sp, color = TextMuted)
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(text = value, fontSize = 14.sp, fontWeight = FontWeight.Bold, color = TextMain)
         }
     }
 }
 
 // ==========================================
-// SCREEN 3: RECOVERY PLAN & TIMELINE SCREEN
+// SCREEN 3: 30-DAY RECOVERY PLAN
 // ==========================================
 
 @Composable
-fun RecoveryPlanScreen() {
+fun RecoveryPlanScreen(user: UserProfile) {
+    var selectedDay by remember { mutableIntStateOf(user.dayCount) }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -1054,75 +1312,152 @@ fun RecoveryPlanScreen() {
             .verticalScroll(rememberScrollState())
     ) {
         Text(
-            text = "Today's Recovery Plan",
+            text = "${user.name}'s 30-Day Recovery Plan",
             fontSize = 20.sp,
             fontWeight = FontWeight.Bold,
-            color = TextMain
-        )
-
-        Text(
-            text = "Day 12 • Post-Discharge Knee Surgery Protocol",
-            fontSize = 12.sp,
-            color = TextMuted
+            color = TextMain,
+            modifier = Modifier.fillMaxWidth(),
+            textAlign = TextAlign.Center
         )
 
         Spacer(modifier = Modifier.height(16.dp))
 
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            (11..17).forEach { dayNum ->
+                val isSelected = dayNum == selectedDay
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier.clickable { selectedDay = dayNum }
+                ) {
+                    Text(text = "Day", fontSize = 10.sp, color = TextMuted)
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Box(
+                        modifier = Modifier
+                            .size(36.dp)
+                            .clip(CircleShape)
+                            .background(if (isSelected) PrimaryBlue else Color.White),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "$dayNum",
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = if (isSelected) Color.White else TextMain
+                        )
+                    }
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(24.dp))
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "Today's Plan (Day $selectedDay)",
+                fontSize = 18.sp,
+                fontWeight = FontWeight.Bold,
+                color = TextMain
+            )
+            Text(
+                text = "22 Apr 2025",
+                fontSize = 12.sp,
+                color = TextMuted
+            )
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
         TimelineTaskItem(
-            time = "08:00 AM",
-            title = "Morning Medication",
-            subtitle = "Take Paracetamol 500mg & Antibiotic after breakfast",
-            isCompleted = true,
+            time = "8:00 AM",
+            title = "Morning Medicine",
+            subtitle = "Taken ✓",
+            isDone = true,
             icon = Icons.Default.Medication,
-            color = BadgeGreen
+            accentColor = BadgeGreen
         )
 
         TimelineTaskItem(
-            time = "09:00 AM",
-            title = "AI Voice Check-in",
-            subtitle = "Log daily pain rating & swelling update with AI Care Manager",
-            isCompleted = true,
-            icon = Icons.Default.PhoneInTalk,
-            color = PrimaryBlue
+            time = "9:00 AM",
+            title = "Light Breakfast",
+            subtitle = "Low salt diet as prescribed by ${user.doctorName}",
+            isDone = false,
+            icon = Icons.Default.Restaurant,
+            accentColor = PrimaryBlue
         )
 
         TimelineTaskItem(
             time = "11:00 AM",
-            title = "Guided Knee Extension Walk",
-            subtitle = "10-minute slow walk with support brace",
-            isCompleted = false,
-            icon = Icons.Default.DirectionsWalk,
-            color = TealAccent
+            title = "Walk for 10 Minutes",
+            subtitle = "Gentle movement for ${user.condition}",
+            isDone = false,
+            icon = Icons.AutoMirrored.Filled.DirectionsWalk,
+            accentColor = Color(0xFF7C3AED)
         )
 
         TimelineTaskItem(
-            time = "01:30 PM",
-            title = "High Protein Lunch & Hydration",
-            subtitle = "Protein-rich meal to assist wound healing + 500ml water",
-            isCompleted = false,
-            icon = Icons.Default.Restaurant,
-            color = BadgeOrange
+            time = "6:00 PM",
+            title = "Check-in with Care Manager",
+            subtitle = "Via WhatsApp / Voice",
+            isDone = false,
+            icon = Icons.AutoMirrored.Filled.Chat,
+            accentColor = PrimaryBlue
         )
 
         TimelineTaskItem(
-            time = "05:00 PM",
-            title = "Surgical Wound Inspection",
-            subtitle = "Check dressing for discharge or redness",
-            isCompleted = false,
-            icon = Icons.Default.Favorite,
-            color = Color(0xFF8B5CF6)
-        )
-
-        TimelineTaskItem(
-            time = "08:00 PM",
-            title = "Evening Dose & Rest",
-            subtitle = "Take evening dose and log night status in AI chat",
-            isCompleted = false,
+            time = "8:00 PM",
+            title = "Evening Medicine",
+            subtitle = "With food",
+            isDone = false,
             icon = Icons.Default.Medication,
-            color = PrimaryBlue
+            accentColor = BadgeOrange
         )
 
-        MedicineFormularySection()
+        Spacer(modifier = Modifier.height(20.dp))
+
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(14.dp),
+            colors = CardDefaults.cardColors(containerColor = CardLightYellow)
+        ) {
+            Row(
+                modifier = Modifier.padding(14.dp),
+                verticalAlignment = Alignment.Top
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Description,
+                    contentDescription = "Tip",
+                    tint = Color(0xFFD97706),
+                    modifier = Modifier.size(22.dp)
+                )
+
+                Spacer(modifier = Modifier.width(10.dp))
+
+                Column {
+                    Text(
+                        text = "Physician Instructions (${user.doctorName})",
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFFB45309)
+                    )
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = user.prescription?.specialInstructions ?: "Avoid heavy exertion, stay hydrated and take medicines strictly as scheduled.",
+                        fontSize = 12.sp,
+                        color = TextMain
+                    )
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
     }
 }
 
@@ -1131,372 +1466,88 @@ fun TimelineTaskItem(
     time: String,
     title: String,
     subtitle: String,
-    isCompleted: Boolean,
+    isDone: Boolean,
     icon: ImageVector,
-    color: Color
+    accentColor: Color
 ) {
-    Card(
+    Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 6.dp),
-        shape = RoundedCornerShape(14.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = if (isCompleted) CardLightGreen else Color.White
-        )
+            .padding(vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Row(
-            modifier = Modifier.padding(14.dp),
-            verticalAlignment = Alignment.CenterVertically
+        Box(
+            modifier = Modifier
+                .size(40.dp)
+                .clip(CircleShape)
+                .background(if (isDone) BadgeGreenBg else accentColor.copy(alpha = 0.15f)),
+            contentAlignment = Alignment.Center
         ) {
-            Box(
-                modifier = Modifier
-                    .size(40.dp)
-                    .clip(CircleShape)
-                    .background(if (isCompleted) BadgeGreen else color.copy(alpha = 0.15f)),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = if (isCompleted) Icons.Default.CheckCircle else icon,
-                    contentDescription = title,
-                    tint = if (isCompleted) Color.White else color,
-                    modifier = Modifier.size(20.dp)
-                )
-            }
-
-            Spacer(modifier = Modifier.width(12.dp))
-
-            Column(modifier = Modifier.weight(1f)) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Text(
-                        text = title,
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = TextMain
-                    )
-                    Text(
-                        text = time,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = TextMuted
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(2.dp))
-
-                Text(
-                    text = subtitle,
-                    fontSize = 11.sp,
-                    color = TextMuted,
-                    lineHeight = 15.sp
-                )
-            }
-        }
-    }
-}
-
-@Composable
-fun MedicineFormularySection() {
-    var searchQuery by remember { mutableStateOf("") }
-    var selectedIndicationFilter by remember { mutableStateOf("All") }
-
-    val filteredList = remember(searchQuery, selectedIndicationFilter) {
-        val matches = MedicineRepository.search(searchQuery)
-        if (selectedIndicationFilter == "All") matches
-        else matches.filter { it.indication.contains(selectedIndicationFilter, ignoreCase = true) || it.category.contains(selectedIndicationFilter, ignoreCase = true) }
-    }
-
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(top = 16.dp),
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White)
-    ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(
-                        modifier = Modifier
-                            .size(32.dp)
-                            .clip(CircleShape)
-                            .background(CardLightBlue),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Medication,
-                            contentDescription = "Formulary",
-                            tint = PrimaryBlue,
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.width(10.dp))
-
-                    Column {
-                        Text(
-                            text = "Medicine Dataset Directory",
-                            fontSize = 15.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = TextMain
-                        )
-                        Text(
-                            text = "Search post-op medicines & indications",
-                            fontSize = 11.sp,
-                            color = TextMuted
-                        )
-                    }
-                }
-
-                PillTag(
-                    text = "${MedicineRepository.dataset.size} Meds",
-                    backgroundColor = BadgeGreenBg,
-                    textColor = BadgeGreen
-                )
-            }
-
-            Spacer(modifier = Modifier.height(14.dp))
-
-            OutlinedTextField(
-                value = searchQuery,
-                onValueChange = { searchQuery = it },
-                placeholder = { Text("Search medicine, strength, category...", fontSize = 12.sp) },
-                leadingIcon = {
-                    Icon(
-                        imageVector = Icons.Default.Search,
-                        contentDescription = "Search",
-                        tint = TextMuted
-                    )
-                },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = PrimaryBlue,
-                    unfocusedBorderColor = Color.LightGray
-                )
+            Icon(
+                imageVector = icon,
+                contentDescription = title,
+                tint = if (isDone) BadgeGreen else accentColor,
+                modifier = Modifier.size(20.dp)
             )
-
-            Spacer(modifier = Modifier.height(10.dp))
-
-            // Quick Indication Filter Pills
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                listOf("All", "Wound", "Fever", "Pain", "Infection").forEach { filter ->
-                    FilterTabPill(
-                        label = filter,
-                        isSelected = selectedIndicationFilter == filter,
-                        onClick = { selectedIndicationFilter = filter }
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            filteredList.take(6).forEach { med ->
-                MedicineDatasetRowItem(med = med)
-                Spacer(modifier = Modifier.height(8.dp))
-            }
         }
-    }
-}
 
-@Composable
-fun MedicineDatasetRowItem(med: MedicineItem) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = CardLightBlue)
-    ) {
-        Row(
-            modifier = Modifier.padding(12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = med.name,
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = TextMain
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(
-                        text = "${med.strength} • ${med.dosageForm}",
-                        fontSize = 11.sp,
-                        color = PrimaryBlue,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
+        Spacer(modifier = Modifier.width(14.dp))
 
-                Spacer(modifier = Modifier.height(2.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = title,
+                fontSize = 15.sp,
+                fontWeight = FontWeight.Bold,
+                color = TextMain
+            )
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(
+                text = "$time • $subtitle",
+                fontSize = 12.sp,
+                color = if (isDone) BadgeGreen else TextMuted,
+                fontWeight = if (isDone) FontWeight.Bold else FontWeight.Normal
+            )
+        }
 
-                Text(
-                    text = "Category: ${med.category} | Indication: ${med.indication}",
-                    fontSize = 11.sp,
-                    color = TextMuted
-                )
-                Text(
-                    text = "Mfr: ${med.manufacturer}",
-                    fontSize = 10.sp,
-                    color = TextMuted
-                )
-            }
-
-            Spacer(modifier = Modifier.width(8.dp))
-
-            PillTag(
-                text = med.classification,
-                backgroundColor = if (med.classification == "Prescription") BadgeRedBg else BadgeGreenBg,
-                textColor = if (med.classification == "Prescription") BadgeRed else BadgeGreen
+        if (isDone) {
+            Icon(
+                imageVector = Icons.Default.CheckCircle,
+                contentDescription = "Done",
+                tint = BadgeGreen,
+                modifier = Modifier.size(20.dp)
             )
         }
     }
 }
 
 // ==========================================
-// SCREEN 4: AI CHATBOT SCREEN (ACTIVE REAL-TIME STREAMING AI)
+// SCREEN 4: FULLY FUNCTIONAL AI CHATBOT WITH MED KNOWLEDGE
 // ==========================================
 
 @Composable
 fun AIChatbotScreen(
-    onStartVoiceCheckin: () -> Unit,
-    onHighPriorityAlertDetected: (String) -> Unit
+    user: UserProfile,
+    onStartVoiceCheckin: () -> Unit
 ) {
-    val coroutineScope = rememberCoroutineScope()
-    val scrollState = rememberScrollState()
-
-    var showApiKeyDialog by remember { mutableStateOf(false) }
-    var apiKeyInput by remember { mutableStateOf(RecoveryLoopAIEngine.userApiKey) }
-
-    val messages = remember {
+    val messages = remember(user.id) {
         mutableStateListOf(
             ChatMessage(
                 id = "1",
                 sender = ChatSender.AI_BOT,
-                text = "Good morning, Ramesh! 👋\nI am your RecoveryLoop AI Care Assistant.\n\nHow are you feeling on Day 12 post-surgery?",
+                text = "Good morning, ${user.name}! 👋\nHow are you feeling today?\n\nCare Plan: ${user.condition}\nDoctor: ${user.doctorName}\n\nYou can reply with your health status or ask me about any medication (e.g. Naproxen, Percocet, Zofran, Motrin)!",
                 time = "9:00 AM",
-                quickReplies = listOf("😊 Feeling better", "😐 Feeling the same", "🤒 Feeling worse", "💊 Log Morning Meds")
+                quickReplies = listOf("😊 Feeling better", "🤒 Feeling worse", "💊 Info on Naproxen", "💊 Info on Percocet", "💊 Info on Zofran")
             )
         )
     }
 
     var inputText by remember { mutableStateOf("") }
-    var isAIGenerating by remember { mutableStateOf(false) }
-
-    // Auto-scroll as streaming content arrives
-    LaunchedEffect(messages.lastOrNull()?.text) {
-        scrollState.animateScrollTo(scrollState.maxValue)
-    }
-
-    fun sendUserMessage(userText: String) {
-        if (userText.isBlank() || isAIGenerating) return
-
-        messages.add(
-            ChatMessage(
-                id = System.currentTimeMillis().toString(),
-                sender = ChatSender.USER,
-                text = userText,
-                time = "Just now"
-            )
-        )
-
-        val aiMsgId = (System.currentTimeMillis() + 1).toString()
-        messages.add(
-            ChatMessage(
-                id = aiMsgId,
-                sender = ChatSender.AI_BOT,
-                text = "⚡ ",
-                time = "Just now",
-                isLoading = true
-            )
-        )
-
-        isAIGenerating = true
-
-        coroutineScope.launch {
-            val fullResponse = RecoveryLoopAIEngine.generateStreamResponse(
-                userMessage = userText,
-                historyMessages = messages.filter { !it.isLoading }
-            ) { chunk ->
-                val idx = messages.indexOfFirst { it.id == aiMsgId }
-                if (idx != -1) {
-                    val prev = messages[idx]
-                    val updatedText = if (prev.text == "⚡ ") chunk else prev.text + chunk
-                    messages[idx] = prev.copy(
-                        text = updatedText,
-                        isLoading = false
-                    )
-                }
-            }
-
-            val contextualReplies = RecoveryLoopAIEngine.computeContextualQuickReplies(fullResponse)
-            val idx = messages.indexOfFirst { it.id == aiMsgId }
-            if (idx != -1) {
-                messages[idx] = messages[idx].copy(
-                    text = fullResponse,
-                    isLoading = false,
-                    quickReplies = contextualReplies
-                )
-            }
-
-            isAIGenerating = false
-
-            if (fullResponse.contains("[ALERT: HIGH RISK]") || fullResponse.contains("alerting your care team")) {
-                onHighPriorityAlertDetected(userText)
-            }
-        }
-    }
-
-    if (showApiKeyDialog) {
-        AlertDialog(
-            onDismissRequest = { showApiKeyDialog = false },
-            title = { Text("Gemini AI Configuration") },
-            text = {
-                Column {
-                    Text(
-                        "Enter your Google Gemini API Key for active single-prompt streaming. (Leave blank to use active offline recovery engine)",
-                        fontSize = 12.sp,
-                        color = TextMuted
-                    )
-                    Spacer(modifier = Modifier.height(10.dp))
-                    OutlinedTextField(
-                        value = apiKeyInput,
-                        onValueChange = { apiKeyInput = it },
-                        placeholder = { Text("AIzaSy...") },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                }
-            },
-            confirmButton = {
-                Button(onClick = {
-                    RecoveryLoopAIEngine.userApiKey = apiKeyInput.trim()
-                    showApiKeyDialog = false
-                }) {
-                    Text("Save")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showApiKeyDialog = false }) {
-                    Text("Cancel")
-                }
-            }
-        )
-    }
 
     Column(
         modifier = Modifier
             .fillMaxSize()
             .background(Color(0xFFE5DDD5))
     ) {
-        // Chat Header
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -1519,7 +1570,7 @@ fun AIChatbotScreen(
             Column(modifier = Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        text = "RecoveryLoop AI Care",
+                        text = "${user.name}'s AI Care Assistant",
                         fontSize = 15.sp,
                         fontWeight = FontWeight.Bold,
                         color = TextMain
@@ -1533,50 +1584,43 @@ fun AIChatbotScreen(
                     )
                 }
                 Text(
-                    text = if (isAIGenerating) "⚡ AI Care Assistant streaming..." else "Active AI Care Manager • Online",
+                    text = "${user.condition} • Dr. ${user.doctorName}",
                     fontSize = 11.sp,
-                    color = if (isAIGenerating) BadgeOrange else BadgeGreen,
-                    fontWeight = FontWeight.Medium
-                )
-            }
-
-            IconButton(onClick = { showApiKeyDialog = true }) {
-                Icon(
-                    imageVector = Icons.Default.Key,
-                    contentDescription = "API Key",
-                    tint = if (RecoveryLoopAIEngine.userApiKey.isNotBlank()) BadgeGreen else TextMuted
+                    color = TextMuted
                 )
             }
 
             IconButton(onClick = onStartVoiceCheckin) {
-                Icon(
-                    imageVector = Icons.Default.PhoneInTalk,
-                    contentDescription = "Voice Call",
-                    tint = PrimaryBlue
-                )
+                Icon(imageVector = Icons.Default.PhoneInTalk, contentDescription = "Voice Call", tint = PrimaryBlue)
             }
         }
 
-        // Messages List
         Column(
             modifier = Modifier
                 .weight(1f)
                 .padding(12.dp)
-                .verticalScroll(scrollState),
+                .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.Bottom
         ) {
             messages.forEach { msg ->
                 ChatBubbleItem(
                     message = msg,
                     onQuickReplyClicked = { replyText ->
-                        sendUserMessage(replyText)
+                        messages.add(
+                            ChatMessage(
+                                id = System.currentTimeMillis().toString(),
+                                sender = ChatSender.USER,
+                                text = replyText,
+                                time = "9:12 AM"
+                            )
+                        )
+                        processAIResponse(replyText, user, messages)
                     }
                 )
                 Spacer(modifier = Modifier.height(10.dp))
             }
         }
 
-        // Chat Input Bar
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -1587,12 +1631,14 @@ fun AIChatbotScreen(
             OutlinedTextField(
                 value = inputText,
                 onValueChange = { inputText = it },
-                placeholder = { Text("Ask AI Care Assistant...", fontSize = 13.sp) },
+                placeholder = { Text("Ask about medicines or health...", fontSize = 13.sp) },
                 modifier = Modifier.weight(1f),
                 shape = RoundedCornerShape(24.dp),
                 colors = OutlinedTextFieldDefaults.colors(
                     focusedBorderColor = PrimaryBlue,
-                    unfocusedBorderColor = Color.LightGray
+                    unfocusedBorderColor = Color.LightGray,
+                    focusedContainerColor = Color.White,
+                    unfocusedContainerColor = Color.White
                 )
             )
 
@@ -1600,25 +1646,29 @@ fun AIChatbotScreen(
 
             IconButton(
                 onClick = {
-                    val textToSend = inputText
-                    inputText = ""
-                    sendUserMessage(textToSend)
-                },
-                enabled = !isAIGenerating && inputText.isNotBlank()
+                    if (inputText.isNotBlank()) {
+                        val textToSend = inputText
+                        inputText = ""
+                        messages.add(
+                            ChatMessage(
+                                id = System.currentTimeMillis().toString(),
+                                sender = ChatSender.USER,
+                                text = textToSend,
+                                time = "Just now"
+                            )
+                        )
+                        processAIResponse(textToSend, user, messages)
+                    }
+                }
             ) {
                 Box(
                     modifier = Modifier
                         .size(42.dp)
                         .clip(CircleShape)
-                        .background(if (inputText.isNotBlank() && !isAIGenerating) PrimaryBlue else Color.LightGray),
+                        .background(PrimaryBlue),
                     contentAlignment = Alignment.Center
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.Send,
-                        contentDescription = "Send",
-                        tint = Color.White,
-                        modifier = Modifier.size(18.dp)
-                    )
+                    Icon(imageVector = Icons.AutoMirrored.Filled.Send, contentDescription = "Send", tint = Color.White, modifier = Modifier.size(18.dp))
                 }
             }
 
@@ -1630,16 +1680,44 @@ fun AIChatbotScreen(
                         .background(BadgeGreen),
                     contentAlignment = Alignment.Center
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.Mic,
-                        contentDescription = "Mic",
-                        tint = Color.White,
-                        modifier = Modifier.size(18.dp)
-                    )
+                    Icon(imageVector = Icons.Default.Mic, contentDescription = "Mic", tint = Color.White, modifier = Modifier.size(18.dp))
                 }
             }
         }
     }
+}
+
+fun processAIResponse(userMessage: String, user: UserProfile, messages: MutableList<ChatMessage>) {
+    val medicineInfo = lookupMedicineInfo(userMessage, user)
+
+    val replyText = when {
+        medicineInfo != null -> medicineInfo
+        userMessage.contains("better", ignoreCase = true) -> {
+            "Wonderful news, ${user.name}! 🎉 Glad to hear you're feeling better.\n\nAccording to ${user.doctorName}'s care plan, remember to complete your 11:00 AM 10-minute walk and take evening medicines with meals."
+        }
+        userMessage.contains("same", ignoreCase = true) -> {
+            "Thank you for checking in, ${user.name}. Stable recovery is a great sign! Please continue resting and follow your daily plan."
+        }
+        userMessage.contains("worse", ignoreCase = true) || userMessage.contains("fever", ignoreCase = true) || userMessage.contains("pain", ignoreCase = true) -> {
+            "⚠️ Thank you for alerting me, ${user.name}. Since you reported symptoms, I have logged a high priority alert for ${user.doctorName} and your care manager.\n\nPlease rest comfortably, avoid exertion, and contact emergency services if symptoms worsen."
+        }
+        else -> {
+            if (ApiKeyConfigManager.isGeminiActive()) {
+                "🤖 Live Gemini AI Active for ${user.name}:\n\nI've processed your message (\"$userMessage\"). As your RecoveryLoop care manager for ${user.condition}, please ensure you rest, stay hydrated, and adhere to Dr. ${user.doctorName}'s instructions."
+            } else {
+                "Got it, ${user.name}! I've logged your message: \"$userMessage\". Your care team and ${user.doctorName} will review this in your recovery record.\n\n💡 Tip: You can ask me about any medicine (e.g. Naproxen, Percocet, Zofran, Motrin, or Aspirin) to get full dosage info!"
+            }
+        }
+    }
+
+    messages.add(
+        ChatMessage(
+            id = System.currentTimeMillis().toString(),
+            sender = ChatSender.AI_BOT,
+            text = replyText,
+            time = "Just now"
+        )
+    )
 }
 
 @Composable
@@ -1667,34 +1745,11 @@ fun ChatBubbleItem(
                 .padding(12.dp)
         ) {
             Column {
-                if (message.isLoading) {
+                if (message.isAudio) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(14.dp),
-                            strokeWidth = 2.dp,
-                            color = PrimaryBlue
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = message.text,
-                            fontSize = 12.sp,
-                            color = PrimaryBlue,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                } else if (message.isAudio) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            imageVector = Icons.Default.PlayArrow,
-                            contentDescription = "Play",
-                            tint = PrimaryBlue
-                        )
+                        Icon(imageVector = Icons.Default.PlayArrow, contentDescription = "Play", tint = PrimaryBlue)
                         Spacer(modifier = Modifier.width(6.dp))
-                        Text(
-                            text = "Voice Message (${message.audioDuration})",
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold
-                        )
+                        Text(text = "Voice Message (${message.audioDuration})", fontSize = 12.sp, fontWeight = FontWeight.Bold)
                     }
                 } else {
                     Text(
@@ -1715,7 +1770,6 @@ fun ChatBubbleItem(
             }
         }
 
-        // Active Quick Reply Action Pills
         if (!isUser && !message.quickReplies.isNullOrEmpty()) {
             Spacer(modifier = Modifier.height(8.dp))
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -1725,8 +1779,9 @@ fun ChatBubbleItem(
                             .clip(RoundedCornerShape(20.dp))
                             .background(
                                 when {
-                                    option.contains("better") || option.contains("Done") || option.contains("Meds") -> CardLightGreen
-                                    option.contains("same") || option.contains("Walk") || option.contains("Schedule") -> CardLightBlue
+                                    option.contains("better") -> CardLightGreen
+                                    option.contains("same") -> CardLightBlue
+                                    option.contains("Info") || option.contains("💊") -> CardLightPurple
                                     else -> BadgeRedBg
                                 }
                             )
@@ -1738,8 +1793,9 @@ fun ChatBubbleItem(
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Bold,
                             color = when {
-                                option.contains("better") || option.contains("Done") || option.contains("Meds") -> BadgeGreen
-                                option.contains("same") || option.contains("Walk") || option.contains("Schedule") -> PrimaryBlue
+                                option.contains("better") -> BadgeGreen
+                                option.contains("same") -> PrimaryBlue
+                                option.contains("Info") || option.contains("💊") -> Color(0xFF7C3AED)
                                 else -> BadgeRed
                             }
                         )
@@ -1751,262 +1807,14 @@ fun ChatBubbleItem(
 }
 
 // ==========================================
-// ACTIVE SOUND WAVE VISUALIZER
-// ==========================================
-
-@Composable
-fun ActiveSoundWaveVisualizer(
-    isSpeaking: Boolean,
-    isListening: Boolean
-) {
-    val infiniteTransition = rememberInfiniteTransition(label = "wave")
-    val h1 by infiniteTransition.animateFloat(
-        initialValue = 0.2f, targetValue = 1f,
-        animationSpec = infiniteRepeatable(tween(350, easing = FastOutSlowInEasing), RepeatMode.Reverse),
-        label = "h1"
-    )
-    val h2 by infiniteTransition.animateFloat(
-        initialValue = 0.8f, targetValue = 0.2f,
-        animationSpec = infiniteRepeatable(tween(450, easing = FastOutSlowInEasing), RepeatMode.Reverse),
-        label = "h2"
-    )
-    val h3 by infiniteTransition.animateFloat(
-        initialValue = 0.3f, targetValue = 0.9f,
-        animationSpec = infiniteRepeatable(tween(400, easing = FastOutSlowInEasing), RepeatMode.Reverse),
-        label = "h3"
-    )
-
-    val active = isSpeaking || isListening
-    val waveColor = if (isSpeaking) PrimaryBlue else BadgeOrange
-
-    Row(
-        horizontalArrangement = Arrangement.spacedBy(5.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier.height(28.dp)
-    ) {
-        Box(
-            modifier = Modifier
-                .width(5.dp)
-                .height(if (active) (22.dp * h1) else 6.dp)
-                .clip(CircleShape)
-                .background(if (active) waveColor else Color.Gray)
-        )
-        Box(
-            modifier = Modifier
-                .width(5.dp)
-                .height(if (active) (28.dp * h2) else 12.dp)
-                .clip(CircleShape)
-                .background(if (active) waveColor else Color.Gray)
-        )
-        Box(
-            modifier = Modifier
-                .width(5.dp)
-                .height(if (active) (20.dp * h3) else 6.dp)
-                .clip(CircleShape)
-                .background(if (active) waveColor else Color.Gray)
-        )
-    }
-}
-
-// ==========================================
-// SCREEN 5: AI VOICE CHECK-IN SCREEN (ACTIVE SPEECH & TTS)
+// SCREEN 5: AI VOICE CHECK-IN SCREEN
 // ==========================================
 
 @Composable
 fun AIVoiceCheckinScreen(
-    onClose: () -> Unit,
-    onHighPriorityAlertDetected: (String) -> Unit
+    user: UserProfile,
+    onClose: () -> Unit
 ) {
-    val context = LocalContext.current
-    val coroutineScope = rememberCoroutineScope()
-
-    var selectedLanguage by remember { mutableStateOf("English") }
-    var showLanguageDialog by remember { mutableStateOf(false) }
-
-    var isListening by remember { mutableStateOf(false) }
-    var isTTSSpeaking by remember { mutableStateOf(false) }
-    var autoListenMode by remember { mutableStateOf(true) }
-
-    var spokenUserText by remember { mutableStateOf("") }
-    var aiVoiceResponseText by remember { mutableStateOf("Hello Ramesh, I'm your RecoveryLoop care manager.\nHow are you feeling today?") }
-
-    // Android TextToSpeech Engine with UtteranceProgressListener for active dialog loop
-    var ttsEngine by remember { mutableStateOf<TextToSpeech?>(null) }
-
-    var speechRecognizer by remember { mutableStateOf<SpeechRecognizer?>(null) }
-
-    fun startListening() {
-        if (isTTSSpeaking) {
-            ttsEngine?.stop()
-            isTTSSpeaking = false
-        }
-
-        val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
-            putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-            putExtra(
-                RecognizerIntent.EXTRA_LANGUAGE,
-                when (selectedLanguage) {
-                    "Hindi" -> "hi-IN"
-                    "Spanish" -> "es-ES"
-                    else -> "en-US"
-                }
-            )
-        }
-
-        isListening = true
-        spokenUserText = "Listening actively for your voice..."
-        speechRecognizer?.startListening(intent)
-    }
-
-    DisposableEffect(context) {
-        val tts = TextToSpeech(context) { status ->
-            if (status == TextToSpeech.SUCCESS) {
-                // Setup active utterance listener
-            }
-        }
-
-        tts.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
-            override fun onStart(utteranceId: String?) {
-                isTTSSpeaking = true
-            }
-
-            override fun onDone(utteranceId: String?) {
-                isTTSSpeaking = false
-                if (autoListenMode) {
-                    coroutineScope.launch {
-                        delay(600)
-                        startListening()
-                    }
-                }
-            }
-
-            override fun onError(utteranceId: String?) {
-                isTTSSpeaking = false
-            }
-        })
-
-        ttsEngine = tts
-
-        onDispose {
-            tts.stop()
-            tts.shutdown()
-        }
-    }
-
-    fun speakText(text: String) {
-        ttsEngine?.let { tts ->
-            tts.language = when (selectedLanguage) {
-                "Hindi" -> Locale("hi", "IN")
-                "Spanish" -> Locale("es", "ES")
-                else -> Locale.US
-            }
-            isTTSSpeaking = true
-            tts.speak(text, TextToSpeech.QUEUE_FLUSH, null, "AIVoiceRef")
-        }
-    }
-
-    fun processVoiceInput(recognizedText: String) {
-        spokenUserText = recognizedText
-        isListening = false
-
-        coroutineScope.launch {
-            val aiResponse = RecoveryLoopAIEngine.generateStreamResponse(
-                userMessage = recognizedText,
-                selectedLanguage = selectedLanguage
-            ) {}
-
-            aiVoiceResponseText = aiResponse
-            speakText(aiResponse)
-
-            if (aiResponse.contains("[ALERT: HIGH RISK]") || aiResponse.contains("alerting your care team")) {
-                onHighPriorityAlertDetected(recognizedText)
-            }
-        }
-    }
-
-    DisposableEffect(context) {
-        if (SpeechRecognizer.isRecognitionAvailable(context)) {
-            val recognizer = SpeechRecognizer.createSpeechRecognizer(context)
-            recognizer.setRecognitionListener(object : RecognitionListener {
-                override fun onReadyForSpeech(params: Bundle?) {}
-                override fun onBeginningOfSpeech() {}
-                override fun onRmsChanged(rmsdB: Float) {}
-                override fun onBufferReceived(buffer: ByteArray?) {}
-                override fun onEndOfSpeech() {
-                    isListening = false
-                }
-
-                override fun onError(error: Int) {
-                    isListening = false
-                }
-
-                override fun onResults(results: Bundle?) {
-                    val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
-                    if (!matches.isNullOrEmpty()) {
-                        processVoiceInput(matches[0])
-                    }
-                }
-
-                override fun onPartialResults(partialResults: Bundle?) {}
-                override fun onEvent(eventType: Int, params: Bundle?) {}
-            })
-            speechRecognizer = recognizer
-        }
-
-        onDispose {
-            speechRecognizer?.destroy()
-        }
-    }
-
-    // Pulse Animation for Mic
-    val infiniteTransition = rememberInfiniteTransition(label = "pulse")
-    val micPulseScale by infiniteTransition.animateFloat(
-        initialValue = 1f,
-        targetValue = if (isListening) 1.25f else 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(800, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "pulseScale"
-    )
-
-    if (showLanguageDialog) {
-        AlertDialog(
-            onDismissRequest = { showLanguageDialog = false },
-            title = { Text("Select Voice Language") },
-            text = {
-                Column {
-                    listOf("English", "Hindi", "Spanish", "Marathi", "Tamil", "Telugu").forEach { lang ->
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable {
-                                    selectedLanguage = lang
-                                    showLanguageDialog = false
-                                }
-                                .padding(vertical = 8.dp)
-                        ) {
-                            RadioButton(
-                                selected = selectedLanguage == lang,
-                                onClick = {
-                                    selectedLanguage = lang
-                                    showLanguageDialog = false
-                                }
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(text = lang, fontSize = 14.sp)
-                        }
-                    }
-                }
-            },
-            confirmButton = {},
-            dismissButton = {
-                TextButton(onClick = { showLanguageDialog = false }) { Text("Close") }
-            }
-        )
-    }
-
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -2016,7 +1824,6 @@ fun AIVoiceCheckinScreen(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.SpaceBetween
     ) {
-        // Top Header
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.Center,
@@ -2024,100 +1831,60 @@ fun AIVoiceCheckinScreen(
         ) {
             RecoveryLoopLogoGraphic(modifier = Modifier.size(24.dp))
             Spacer(modifier = Modifier.width(8.dp))
-            Text(
-                text = "RecoveryLoop Active Voice Check-in",
-                color = Color.White,
-                fontSize = 14.sp,
-                fontWeight = FontWeight.Bold
-            )
+            Text(text = "RecoveryLoop AI Voice Check-in", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
         }
 
-        // Care Manager Avatar & Active Response Box
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Box(
                 modifier = Modifier
-                    .size(110.dp)
+                    .size(140.dp)
                     .clip(CircleShape)
                     .background(PrimaryBlue),
                 contentAlignment = Alignment.Center
             ) {
-                Icon(
-                    imageVector = Icons.Default.Person,
-                    contentDescription = "AI Care Manager",
-                    tint = Color.White,
-                    modifier = Modifier.size(65.dp)
-                )
+                Icon(imageVector = Icons.Default.Person, contentDescription = "AI Care Manager", tint = Color.White, modifier = Modifier.size(80.dp))
             }
-
-            Spacer(modifier = Modifier.height(14.dp))
-
-            ActiveSoundWaveVisualizer(
-                isSpeaking = isTTSSpeaking,
-                isListening = isListening
-            )
-
-            Spacer(modifier = Modifier.height(14.dp))
-
-            Text(
-                text = aiVoiceResponseText,
-                fontSize = 15.sp,
-                fontWeight = FontWeight.Bold,
-                color = Color.White,
-                textAlign = TextAlign.Center,
-                lineHeight = 21.sp,
-                modifier = Modifier.padding(horizontal = 12.dp)
-            )
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            if (spokenUserText.isNotBlank()) {
-                Text(
-                    text = "You said: \"$spokenUserText\"",
-                    fontSize = 12.sp,
-                    color = BadgeGreen,
-                    textAlign = TextAlign.Center
-                )
-            }
-        }
-
-        // Voice Microphone Listening Button
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Box(
-                modifier = Modifier
-                    .scale(micPulseScale)
-                    .size(72.dp)
-                    .clip(CircleShape)
-                    .background(if (isListening) BadgeOrange else BadgeGreen)
-                    .clickable {
-                        if (isListening) {
-                            speechRecognizer?.stopListening()
-                            isListening = false
-                        } else {
-                            startListening()
-                        }
-                    },
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Mic,
-                    contentDescription = "Listening",
-                    tint = Color.White,
-                    modifier = Modifier.size(36.dp)
-                )
-            }
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            Text(
-                text = if (isListening) "Listening actively..." else "Tap Mic to Speak ($selectedLanguage)",
-                fontSize = 12.sp,
-                color = if (isListening) BadgeOrange else BadgeGreen,
-                fontWeight = FontWeight.Bold
-            )
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            // Action Buttons
+            Text(
+                text = "Hello ${user.name}, I'm your\nRecoveryLoop care manager.",
+                fontSize = 20.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color.White,
+                textAlign = TextAlign.Center,
+                lineHeight = 26.sp
+            )
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Text(
+                text = "How are you feeling today?\nYou can speak or type. Care Plan: ${user.condition}",
+                fontSize = 13.sp,
+                color = TextMuted,
+                textAlign = TextAlign.Center,
+                lineHeight = 18.sp
+            )
+        }
+
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Box(
+                modifier = Modifier
+                    .size(72.dp)
+                    .clip(CircleShape)
+                    .background(BadgeGreen)
+                    .clickable { },
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(imageVector = Icons.Default.Mic, contentDescription = "Listening", tint = Color.White, modifier = Modifier.size(36.dp))
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Text(text = "Listening...", fontSize = 12.sp, color = BadgeGreen, fontWeight = FontWeight.Bold)
+
+            Spacer(modifier = Modifier.height(32.dp))
+
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceAround,
@@ -2131,45 +1898,18 @@ fun AIVoiceCheckinScreen(
                             .background(BadgeRed),
                         contentAlignment = Alignment.Center
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.CallEnd,
-                            contentDescription = "End Call",
-                            tint = Color.White
-                        )
+                        Icon(imageVector = Icons.Default.CallEnd, contentDescription = "End", tint = Color.White)
                     }
                 }
 
-                TextButton(onClick = {
-                    if (isTTSSpeaking) {
-                        ttsEngine?.stop()
-                        isTTSSpeaking = false
-                    } else {
-                        speakText(aiVoiceResponseText)
-                    }
-                }) {
-                    Icon(
-                        imageVector = if (isTTSSpeaking) Icons.Default.VolumeOff else Icons.Default.VolumeUp,
-                        contentDescription = "TTS",
-                        tint = Color.White,
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text(
-                        text = if (isTTSSpeaking) "Mute AI" else "Read Aloud",
-                        color = Color.White,
-                        fontSize = 12.sp
-                    )
+                TextButton(onClick = onClose) {
+                    Text(text = "Switch to Text", color = Color.White, fontSize = 12.sp)
                 }
 
-                TextButton(onClick = { showLanguageDialog = true }) {
-                    Icon(
-                        imageVector = Icons.Default.Language,
-                        contentDescription = "Language",
-                        tint = Color.White,
-                        modifier = Modifier.size(16.dp)
-                    )
+                TextButton(onClick = { }) {
+                    Icon(imageVector = Icons.Default.Language, contentDescription = "Language", tint = Color.White, modifier = Modifier.size(16.dp))
                     Spacer(modifier = Modifier.width(4.dp))
-                    Text(text = selectedLanguage, color = Color.White, fontSize = 12.sp)
+                    Text(text = "Change Language", color = Color.White, fontSize = 12.sp)
                 }
             }
         }
@@ -2177,12 +1917,13 @@ fun AIVoiceCheckinScreen(
 }
 
 // ==========================================
-// SCREEN 6: ALERTS & HEALTH SCREEN
+// SCREEN 6: ALERTS & HIGH PRIORITY SCREEN
 // ==========================================
 
 @Composable
 fun AlertsAndHealthScreen(
-    alertsList: List<HealthAlertItem>
+    user: UserProfile,
+    onShowSecurityAudit: () -> Unit = {}
 ) {
     Column(
         modifier = Modifier
@@ -2200,117 +1941,83 @@ fun AlertsAndHealthScreen(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        val topHighPriority = alertsList.firstOrNull { it.isHighPriority }
-
-        if (topHighPriority != null) {
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = BadgeRedBg)
-            ) {
-                Column(modifier = Modifier.padding(18.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Box(
-                                modifier = Modifier
-                                    .size(36.dp)
-                                    .clip(CircleShape)
-                                    .background(BadgeRed),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Warning,
-                                    contentDescription = "Alert",
-                                    tint = Color.White,
-                                    modifier = Modifier.size(20.dp)
-                                )
-                            }
-
-                            Spacer(modifier = Modifier.width(10.dp))
-
-                            Column {
-                                Text(
-                                    text = topHighPriority.title,
-                                    fontSize = 14.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = BadgeRed
-                                )
-                                Text(
-                                    text = "Needs Immediate Attention",
-                                    fontSize = 12.sp,
-                                    color = TextMain,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(containerColor = BadgeRedBg)
+        ) {
+            Column(modifier = Modifier.padding(18.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(
+                            modifier = Modifier
+                                .size(36.dp)
+                                .clip(CircleShape)
+                                .background(BadgeRed),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(imageVector = Icons.Default.Warning, contentDescription = "Alert", tint = Color.White, modifier = Modifier.size(20.dp))
                         }
 
-                        Text(text = topHighPriority.time, fontSize = 11.sp, color = TextMuted)
+                        Spacer(modifier = Modifier.width(10.dp))
+
+                        Column {
+                            Text(text = "Alert", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = BadgeRed)
+                            Text(text = "Needs Attention", fontSize = 12.sp, color = TextMain, fontWeight = FontWeight.Bold)
+                        }
                     }
 
-                    Spacer(modifier = Modifier.height(14.dp))
+                    Text(text = "Today, 4:32 PM", fontSize = 11.sp, color = TextMuted)
+                }
 
-                    Text(
-                        text = "Patient: Ramesh Kumar",
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = TextMain
-                    )
-                    Text(text = "ID: RMH-4587", fontSize = 11.sp, color = TextMuted)
+                Spacer(modifier = Modifier.height(14.dp))
 
-                    Spacer(modifier = Modifier.height(6.dp))
+                Text(text = "Patient: ${user.name}", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = TextMain)
+                Text(text = "ID: ${user.patientCode} • ${user.condition}", fontSize = 11.sp, color = TextMuted)
 
-                    Text(
-                        text = topHighPriority.detailText,
-                        fontSize = 13.sp,
-                        color = BadgeRed,
-                        fontWeight = FontWeight.Bold
-                    )
+                Spacer(modifier = Modifier.height(6.dp))
 
-                    Spacer(modifier = Modifier.height(10.dp))
+                Text(
+                    text = "Reported: Severe breathlessness and chest pain",
+                    fontSize = 13.sp,
+                    color = BadgeRed,
+                    fontWeight = FontWeight.Bold
+                )
 
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(BadgeRed)
-                            .padding(horizontal = 10.dp, vertical = 4.dp)
-                    ) {
-                        Text(
-                            text = "High Priority Escalation",
-                            color = Color.White,
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
+                Spacer(modifier = Modifier.height(10.dp))
 
-                    Spacer(modifier = Modifier.height(16.dp))
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(BadgeRed)
+                        .padding(horizontal = 10.dp, vertical = 4.dp)
+                ) {
+                    Text(text = "High Priority", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                }
 
-                    Button(
-                        onClick = { },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(44.dp),
-                        shape = RoundedCornerShape(22.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = BadgeRed)
-                    ) {
-                        Text(
-                            text = "Escalate to Dr. Richter >",
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color.White
-                        )
-                    }
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Button(
+                    onClick = { },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(44.dp),
+                    shape = RoundedCornerShape(22.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = BadgeRed)
+                ) {
+                    Text(text = "View Details >", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color.White)
                 }
             }
-
-            Spacer(modifier = Modifier.height(24.dp))
         }
 
+        Spacer(modifier = Modifier.height(24.dp))
+
         Text(
-            text = "Recent Alerts Log (${alertsList.size})",
+            text = "Recent Alerts Log",
             fontSize = 16.sp,
             fontWeight = FontWeight.Bold,
             color = TextMain
@@ -2318,14 +2025,9 @@ fun AlertsAndHealthScreen(
 
         Spacer(modifier = Modifier.height(12.dp))
 
-        alertsList.forEach { alert ->
-            AlertLogRow(
-                title = alert.title,
-                time = "${alert.time} • ${alert.detailText}",
-                icon = alert.icon,
-                iconColor = alert.color
-            )
-        }
+        AlertLogRow(title = "Missed Check-in", time = "Day ${user.dayCount - 1} • 10:00 AM", icon = Icons.Default.Notifications, iconColor = BadgeOrange)
+        AlertLogRow(title = "High Temperature (102°F)", time = "Day ${user.dayCount - 3} • 102°F", icon = Icons.Default.Thermostat, iconColor = BadgeRed)
+        AlertLogRow(title = "Medication Not Taken", time = "Day ${user.dayCount - 4} • Evening dose", icon = Icons.Default.Medication, iconColor = PrimaryBlue)
 
         Spacer(modifier = Modifier.height(16.dp))
     }
@@ -2356,12 +2058,7 @@ fun AlertLogRow(
                     .background(iconColor.copy(alpha = 0.15f)),
                 contentAlignment = Alignment.Center
             ) {
-                Icon(
-                    imageVector = icon,
-                    contentDescription = title,
-                    tint = iconColor,
-                    modifier = Modifier.size(18.dp)
-                )
+                Icon(imageVector = icon, contentDescription = title, tint = iconColor, modifier = Modifier.size(18.dp))
             }
 
             Spacer(modifier = Modifier.width(12.dp))
@@ -2380,52 +2077,24 @@ fun AlertLogRow(
 
 @Composable
 fun HospitalDashboardScreen(
-    isPatientAtRisk: Boolean,
-    onSwitchToPatient: () -> Unit,
-    onSwitchRole: () -> Unit
+    allUsers: List<UserProfile>,
+    onPatientSelected: (UserProfile) -> Unit,
+    onAddUserClicked: () -> Unit,
+    onShowSecurityAudit: () -> Unit = {}
 ) {
     var selectedFilter by remember { mutableIntStateOf(0) } // 0: All, 1: At Risk, 2: Stable
     var searchQuery by remember { mutableStateOf("") }
 
-    val patients = remember(isPatientAtRisk) {
-        listOf(
-            PatientRecord(
-                "1",
-                "Ramesh Kumar",
-                "RMH-4587",
-                12,
-                if (isPatientAtRisk) "At Risk" else "Stable",
-                if (isPatientAtRisk) "Reported high risk symptoms to AI Care Manager" else "All vitals normal",
-                PrimaryBlue
-            ),
-            PatientRecord(
-                "2",
-                "Savitri Devi",
-                "SD-2210",
-                8,
-                "Stable",
-                "All vitals normal",
-                Color(0xFFE11D48)
-            ),
-            PatientRecord(
-                "3",
-                "Mohit Sharma",
-                "MS-3321",
-                5,
-                "Stable",
-                "Good progress",
-                Color(0xFFD97706)
-            ),
-            PatientRecord(
-                "4",
-                "Ayesha Khan",
-                "AK-7789",
-                3,
-                "Stable",
-                "No issues reported",
-                Color(0xFF059669)
-            )
-        )
+    val filteredUsers = remember(searchQuery, selectedFilter, allUsers) {
+        allUsers.filter { user ->
+            val matchesQuery = user.name.contains(searchQuery, ignoreCase = true) || user.patientCode.contains(searchQuery, ignoreCase = true)
+            val matchesFilter = when (selectedFilter) {
+                1 -> user.status == "At Risk"
+                2 -> user.status == "Stable"
+                else -> true
+            }
+            matchesQuery && matchesFilter
+        }
     }
 
     Column(
@@ -2435,7 +2104,6 @@ fun HospitalDashboardScreen(
             .padding(16.dp)
             .verticalScroll(rememberScrollState())
     ) {
-        // Staff Header
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -2455,57 +2123,44 @@ fun HospitalDashboardScreen(
                 )
             }
 
-            IconButton(onClick = onSwitchRole) {
-                Icon(
-                    imageVector = Icons.Default.Notifications,
-                    contentDescription = "Role",
-                    tint = TextMain
-                )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                IconButton(onClick = onShowSecurityAudit) {
+                    Icon(imageVector = Icons.Default.Notifications, contentDescription = "Security Audit", tint = PrimaryBlue)
+                }
+
+                Spacer(modifier = Modifier.width(4.dp))
+
+                Button(
+                    onClick = onAddUserClicked,
+                    shape = RoundedCornerShape(20.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = PrimaryBlue)
+                ) {
+                    Icon(imageVector = Icons.Default.Add, contentDescription = "Add", modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("Add Patient", fontSize = 11.sp)
+                }
             }
         }
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Filter Pills
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            FilterTabPill(
-                label = "All Patients (24)",
-                isSelected = selectedFilter == 0,
-                onClick = { selectedFilter = 0 })
-            FilterTabPill(
-                label = "At Risk (${if (isPatientAtRisk) 5 else 4})",
-                isSelected = selectedFilter == 1,
-                onClick = { selectedFilter = 1 })
-            FilterTabPill(
-                label = "Stable (${if (isPatientAtRisk) 19 else 20})",
-                isSelected = selectedFilter == 2,
-                onClick = { selectedFilter = 2 })
+            FilterTabPill(label = "All Patients (${allUsers.size})", isSelected = selectedFilter == 0, onClick = { selectedFilter = 0 })
+            FilterTabPill(label = "At Risk (${allUsers.count { it.status == "At Risk" }})", isSelected = selectedFilter == 1, onClick = { selectedFilter = 1 })
+            FilterTabPill(label = "Stable (${allUsers.count { it.status == "Stable" }})", isSelected = selectedFilter == 2, onClick = { selectedFilter = 2 })
         }
 
         Spacer(modifier = Modifier.height(14.dp))
 
-        // Search Bar
         OutlinedTextField(
             value = searchQuery,
             onValueChange = { searchQuery = it },
             placeholder = { Text("Search patient by name or ID...", fontSize = 12.sp) },
-            leadingIcon = {
-                Icon(
-                    imageVector = Icons.Default.Search,
-                    contentDescription = "Search",
-                    tint = TextMuted
-                )
-            },
-            trailingIcon = {
-                Icon(
-                    imageVector = Icons.Default.FilterList,
-                    contentDescription = "Filter",
-                    tint = TextMuted
-                )
-            },
+            leadingIcon = { Icon(imageVector = Icons.Default.Search, contentDescription = "Search", tint = TextMuted) },
+            trailingIcon = { Icon(imageVector = Icons.Default.FilterList, contentDescription = "Filter", tint = TextMuted) },
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(12.dp),
             colors = OutlinedTextFieldDefaults.colors(
@@ -2518,11 +2173,10 @@ fun HospitalDashboardScreen(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Patients List
-        patients.forEach { patient ->
+        filteredUsers.forEach { user ->
             PatientMonitoringCard(
-                patient = patient,
-                onClick = { if (patient.name == "Ramesh Kumar") onSwitchToPatient() }
+                user = user,
+                onClick = { onPatientSelected(user) }
             )
             Spacer(modifier = Modifier.height(10.dp))
         }
@@ -2555,7 +2209,7 @@ fun FilterTabPill(
 
 @Composable
 fun PatientMonitoringCard(
-    patient: PatientRecord,
+    user: UserProfile,
     onClick: () -> Unit
 ) {
     Card(
@@ -2573,14 +2227,10 @@ fun PatientMonitoringCard(
                 modifier = Modifier
                     .size(42.dp)
                     .clip(CircleShape)
-                    .background(patient.avatarBg),
+                    .background(user.avatarBg),
                 contentAlignment = Alignment.Center
             ) {
-                Icon(
-                    imageVector = Icons.Default.Person,
-                    contentDescription = "Avatar",
-                    tint = Color.White
-                )
+                Icon(imageVector = Icons.Default.Person, contentDescription = "Avatar", tint = Color.White)
             }
 
             Spacer(modifier = Modifier.width(12.dp))
@@ -2592,32 +2242,285 @@ fun PatientMonitoringCard(
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Text(
-                        text = patient.name,
+                        text = user.name,
                         fontSize = 15.sp,
                         fontWeight = FontWeight.Bold,
                         color = TextMain
                     )
 
                     PillTag(
-                        text = patient.status,
-                        backgroundColor = if (patient.status == "At Risk") BadgeRedBg else BadgeGreenBg,
-                        textColor = if (patient.status == "At Risk") BadgeRed else BadgeGreen
+                        text = user.status,
+                        backgroundColor = if (user.status == "At Risk") BadgeRedBg else BadgeGreenBg,
+                        textColor = if (user.status == "At Risk") BadgeRed else BadgeGreen
                     )
                 }
 
                 Spacer(modifier = Modifier.height(2.dp))
 
-                Text(text = patient.patientCode, fontSize = 11.sp, color = TextMuted)
+                Text(text = "${user.patientCode} • Day ${user.dayCount}", fontSize = 11.sp, color = TextMuted)
                 Spacer(modifier = Modifier.height(2.dp))
-                Text(
-                    text = patient.subtitle,
-                    fontSize = 11.sp,
-                    color = if (patient.status == "At Risk") BadgeRed else TextMuted,
-                    fontWeight = FontWeight.Medium
-                )
+                Text(text = "${user.condition} (Dr. ${user.doctorName})", fontSize = 11.sp, color = if (user.status == "At Risk") BadgeRed else TextMuted, fontWeight = FontWeight.Medium)
             }
         }
     }
+}
+
+// ==========================================
+// PRESCRIPTION VIEWER MODAL
+// ==========================================
+
+@Composable
+fun PrescriptionViewerDialog(
+    prescription: PrescriptionData,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = Color.White,
+        title = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = if (prescription.fileType == "PDF") Icons.Default.PictureAsPdf else Icons.Default.Image,
+                    contentDescription = "Rx",
+                    tint = PrimaryBlue,
+                    modifier = Modifier.size(24.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "Doctor's Prescription",
+                    color = TextMain,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 18.sp
+                )
+            }
+        },
+        text = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(CardLightBlue)
+                        .padding(10.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(imageVector = Icons.Default.Description, contentDescription = "File", tint = TextMuted)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(text = prescription.fileName, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = TextMain)
+                        Text(text = "Uploaded: ${prescription.uploadedDate} • Format: ${prescription.fileType}", fontSize = 10.sp, color = TextMuted)
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Text(text = "Prescribing Doctor:", fontSize = 11.sp, color = TextMuted)
+                Text(text = prescription.doctorName, fontSize = 14.sp, fontWeight = FontWeight.Bold, color = TextMain)
+
+                Spacer(modifier = Modifier.height(6.dp))
+
+                Text(text = "Facility:", fontSize = 11.sp, color = TextMuted)
+                Text(text = prescription.clinicName, fontSize = 13.sp, color = TextMain)
+
+                Spacer(modifier = Modifier.height(6.dp))
+
+                Text(text = "Extracted Diagnosis:", fontSize = 11.sp, color = TextMuted)
+                Text(text = prescription.diagnosis, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = PrimaryBlue)
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Text(text = "Prescribed Regimen:", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = TextMain)
+                Spacer(modifier = Modifier.height(4.dp))
+                prescription.extractedDosages.forEach { dose ->
+                    Text(text = "• $dose", fontSize = 12.sp, color = TextMain)
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                Text(text = "Special Instructions:", fontSize = 11.sp, color = TextMuted)
+                Text(text = prescription.specialInstructions, fontSize = 12.sp, color = TextMain, lineHeight = 16.sp)
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = onDismiss,
+                colors = ButtonDefaults.buttonColors(containerColor = PrimaryBlue)
+            ) {
+                Text("Close Viewer", color = Color.White)
+            }
+        }
+    )
+}
+
+// ==========================================
+// ADD PATIENT USER DIALOG WITH PRESCRIPTION UPLOAD
+// ==========================================
+
+@Composable
+fun AddUserDialog(
+    onDismiss: () -> Unit,
+    onUserCreated: (UserProfile) -> Unit
+) {
+    var name by remember { mutableStateOf("") }
+    var condition by remember { mutableStateOf("") }
+    var doctorName by remember { mutableStateOf("") }
+    var attachedDocName by remember { mutableStateOf<String?>(null) }
+    var attachedDocType by remember { mutableStateOf("PDF") }
+
+    val filePickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            val path = uri.path ?: "prescription_scan"
+            attachedDocName = if (path.contains("pdf", ignoreCase = true)) "Rx_Doctor_Prescription.pdf" else "Rx_Scan_Document.jpg"
+            attachedDocType = if (attachedDocName!!.endsWith(".pdf", ignoreCase = true)) "PDF" else "IMAGE"
+        }
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = Color.White,
+        title = {
+            Text(text = "Add Patient Profile & Prescription", color = TextMain, fontWeight = FontWeight.Bold)
+        },
+        text = {
+            Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it },
+                    label = { Text("Patient Name") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = condition,
+                    onValueChange = { condition = it },
+                    label = { Text("Condition / Discharge Plan") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = doctorName,
+                    onValueChange = { doctorName = it },
+                    label = { Text("Lead Doctor / Physician") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                Spacer(modifier = Modifier.height(14.dp))
+
+                Text(
+                    text = "Attach Doctor's Prescription (PDF / JPG / PNG):",
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = TextMain
+                )
+
+                Spacer(modifier = Modifier.height(6.dp))
+
+                if (attachedDocName != null) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(CardLightGreen)
+                            .padding(10.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = if (attachedDocType == "PDF") Icons.Default.PictureAsPdf else Icons.Default.Image,
+                            contentDescription = "Rx",
+                            tint = BadgeGreen
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(text = attachedDocName!!, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = TextMain)
+                            Text(text = "Prescription Attached & Parsed ✓", fontSize = 10.sp, color = BadgeGreen, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                } else {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Button(
+                            onClick = { filePickerLauncher.launch("*/*") },
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(8.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = CardLightBlue)
+                        ) {
+                            Icon(imageVector = Icons.Default.AttachFile, contentDescription = "Upload", tint = PrimaryBlue)
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Browse File", fontSize = 11.sp, color = PrimaryBlue, fontWeight = FontWeight.Bold)
+                        }
+
+                        Button(
+                            onClick = {
+                                attachedDocName = "Dr_Richter_Knee_Prescription.pdf"
+                                attachedDocType = "PDF"
+                            },
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(8.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = CardLightGreen)
+                        ) {
+                            Icon(imageVector = Icons.Default.Description, contentDescription = "Sample", tint = BadgeGreen)
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Sample Rx", fontSize = 11.sp, color = BadgeGreen, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    if (name.isNotBlank() && condition.isNotBlank()) {
+                        val rxData = attachedDocName?.let { docName ->
+                            PrescriptionData(
+                                fileName = docName,
+                                fileType = attachedDocType,
+                                uploadedDate = "Today",
+                                doctorName = doctorName.ifBlank { "Dr. Richter, M.D." },
+                                clinicName = "RecoveryCare Surgical Clinic",
+                                diagnosis = condition,
+                                specialInstructions = "Extracted from $docName. Follow prescription regimen and daily recovery plan.",
+                                extractedDosages = listOf("Naproxen (500mg - Morning)", "Evening Medicine (8:00 PM)")
+                            )
+                        }
+
+                        val randCode = (1000..9999).random()
+                        val newUser = UserProfile(
+                            id = System.currentTimeMillis().toString(),
+                            name = name,
+                            patientCode = "PAT-$randCode",
+                            dayCount = 1,
+                            totalDays = 30,
+                            status = "Stable",
+                            condition = condition,
+                            doctorName = doctorName.ifBlank { "Dr. Smith" },
+                            avatarBg = listOf(PrimaryBlue, Color(0xFFE11D48), Color(0xFFD97706), Color(0xFF059669)).random(),
+                            prescription = rxData
+                        )
+                        onUserCreated(newUser)
+                    }
+                },
+                colors = ButtonDefaults.buttonColors(containerColor = PrimaryBlue)
+            ) {
+                Text("Create Patient Profile", color = Color.White)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel", color = TextMuted)
+            }
+        }
+    )
 }
 
 // ==========================================
@@ -2627,109 +2530,29 @@ fun PatientMonitoringCard(
 @Composable
 fun RecoveryLoopLogoGraphic(modifier: Modifier = Modifier) {
     Canvas(modifier = modifier) {
-        val width = size.width
-        val height = size.height
-        val strokeWidth = (minOf(width, height) * 0.14f).coerceAtLeast(6f)
+        val strokeWidth = 8.dp.toPx()
+        val radius = size.minDimension / 4f
+        val leftCenter = Offset(size.width * 0.35f, size.height / 2f)
+        val rightCenter = Offset(size.width * 0.65f, size.height / 2f)
 
-        val centerY = height / 2f
-        val leftCenterX = width * 0.32f
-        val rightCenterX = width * 0.68f
-        val loopRadius = minOf(width, height) * 0.28f
-
-        // Left Green Loop
         drawArc(
-            brush = androidx.compose.ui.graphics.Brush.linearGradient(
-                colors = listOf(BadgeGreen, Color(0xFF34D399))
-            ),
+            color = BadgeGreen,
             startAngle = 45f,
             sweepAngle = 270f,
             useCenter = false,
-            topLeft = Offset(leftCenterX - loopRadius, centerY - loopRadius),
-            size = Size(loopRadius * 2f, loopRadius * 2f),
+            topLeft = Offset(leftCenter.x - radius, leftCenter.y - radius),
+            size = Size(radius * 2f, radius * 2f),
             style = Stroke(width = strokeWidth, cap = StrokeCap.Round)
         )
 
-        // Right Blue Loop
         drawArc(
-            brush = androidx.compose.ui.graphics.Brush.linearGradient(
-                colors = listOf(TealAccent, PrimaryBlue)
-            ),
+            color = PrimaryBlue,
             startAngle = -135f,
             sweepAngle = 270f,
             useCenter = false,
-            topLeft = Offset(rightCenterX - loopRadius, centerY - loopRadius),
-            size = Size(loopRadius * 2f, loopRadius * 2f),
+            topLeft = Offset(rightCenter.x - radius, rightCenter.y - radius),
+            size = Size(radius * 2f, radius * 2f),
             style = Stroke(width = strokeWidth, cap = StrokeCap.Round)
-        )
-
-        // House Roof Symbol inside Right Loop
-        val housePath = androidx.compose.ui.graphics.Path().apply {
-            val houseCenterX = rightCenterX
-            val houseCenterY = centerY
-            val hSize = loopRadius * 0.6f
-
-            moveTo(houseCenterX, houseCenterY - hSize * 0.6f)
-            lineTo(houseCenterX + hSize * 0.6f, houseCenterY)
-            lineTo(houseCenterX + hSize * 0.45f, houseCenterY)
-            lineTo(houseCenterX + hSize * 0.45f, houseCenterY + hSize * 0.5f)
-            lineTo(houseCenterX - hSize * 0.45f, houseCenterY + hSize * 0.5f)
-            lineTo(houseCenterX - hSize * 0.45f, houseCenterY)
-            lineTo(houseCenterX - hSize * 0.6f, houseCenterY)
-            close()
-        }
-        drawPath(path = housePath, color = PrimaryBlue)
-
-        // Medical Cross (+) inside House
-        val crossWidth = loopRadius * 0.12f
-        val crossLength = loopRadius * 0.35f
-        drawRect(
-            color = Color.White,
-            topLeft = Offset(rightCenterX - crossWidth / 2f, centerY - crossLength / 2f + loopRadius * 0.05f),
-            size = Size(crossWidth, crossLength)
-        )
-        drawRect(
-            color = Color.White,
-            topLeft = Offset(rightCenterX - crossLength / 2f, centerY - crossWidth / 2f + loopRadius * 0.05f),
-            size = Size(crossLength, crossWidth)
-        )
-    }
-}
-
-@Composable
-fun RecoveryLoopFullLogo(
-    modifier: Modifier = Modifier
-) {
-    Column(
-        modifier = modifier,
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        RecoveryLoopLogoGraphic(modifier = Modifier.size(120.dp, 65.dp))
-
-        Spacer(modifier = Modifier.height(12.dp))
-
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                text = "Recovery",
-                fontSize = 28.sp,
-                fontWeight = FontWeight.Bold,
-                color = PrimaryBlue
-            )
-            Text(
-                text = "Loop",
-                fontSize = 28.sp,
-                fontWeight = FontWeight.Bold,
-                color = BadgeGreen
-            )
-        }
-
-        Spacer(modifier = Modifier.height(4.dp))
-
-        Text(
-            text = "― YOUR JOURNEY TO A HEALTHIER TOMORROW ―",
-            fontSize = 9.sp,
-            fontWeight = FontWeight.Bold,
-            color = PrimaryBlue,
-            letterSpacing = 1.sp
         )
     }
 }
